@@ -25,6 +25,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-written-file.sh\"",
+            "shell": "bash",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }

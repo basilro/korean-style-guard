@@ -10,7 +10,8 @@ Codex 에서 쓴다.
 |---|---|
 | `rules/ko-style-rules.md` | 보칙 본문 9항목. 단일 출처 |
 | `hooks/inject-rules.sh` | SessionStart 훅. 보칙을 세션 컨텍스트에 주입 |
-| `hooks/check-output.sh` | Stop 훅. 위반 시 exit 2 로 막고 재작성을 요구 |
+| `hooks/check-output.sh` | Stop 훅. 대화 답변을 검사해 위반 시 재작성을 요구 |
+| `hooks/check-written-file.sh` | PostToolUse 훅. 방금 쓴 산문 파일을 검사 |
 | `scripts/ko_style_check.py` | 계수기. 단독으로도 쓴다 |
 | `skills/ko-style/` | 이미 쓰인 글을 점검하고 고치는 스킬 |
 | `commands/ko-check.md` | `/ko-check [파일]` 슬래시 명령 |
@@ -48,6 +49,19 @@ matcher 에 `clear` 와 `compact` 를 넣어 두어 `/clear` 뒤에도 다시 �
 ### Stop 훅이 필요한 이유
 
 규칙만 적어 두면 지켜지지 않는다. 엠대시를 금지하는 지침이 이미 있어도 계속 나온다.
+
+### 검사 범위
+
+Stop 훅은 대화 답변만 본다. 도구로 쓴 파일은 그 시야 밖이므로 PostToolUse 훅이 맡는다.
+`Write` 와 `Edit` 뒤에 방금 쓴 파일을 검사한다.
+
+파일 쪽은 대상을 좁게 잡는다. 코드에 서식 규칙을 들이대면 오탐이 쏟아지기 때문이다.
+
+- 확장자가 `.md` `.markdown` `.mdx` `.txt` `.rst` 인 것만 본다
+- 한글 비율이 15% 를 넘고 100자 이상인 파일만 본다
+- `.git` `node_modules` `vendor` `dist` `build` 같은 트리는 건너뛴다
+
+파일 검사를 끄려면 `KO_STYLE_SKIP_FILES=1` 을 환경 변수로 둔다.
 
 ## Claude Code 에서 쓰기
 

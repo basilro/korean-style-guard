@@ -28,6 +28,7 @@ import json, os, sys
 root, hooks_path = sys.argv[1], sys.argv[2]
 inject = os.path.join(root, "hooks", "inject-rules.sh")
 check = os.path.join(root, "scripts", "stop_hook.py")
+postwrite = os.path.join(root, "scripts", "post_write_hook.py")
 
 cfg = {}
 if os.path.exists(hooks_path):
@@ -59,12 +60,16 @@ r1 = put("SessionStart", {
 r2 = put("Stop", {
     "hooks": [{"type": "command", "command": f'python3 "{check}"', "timeoutSec": 15}],
 })
+r3 = put("PostToolUse", {
+    "matcher": "Write|Edit",
+    "hooks": [{"type": "command", "command": f'python3 "{postwrite}"', "timeoutSec": 15}],
+})
 
 with open(hooks_path, "w", encoding="utf-8") as fh:
     json.dump(cfg, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
 label = {"added": "추가", "updated": "갱신"}
-print(f"  훅 {label[r1]}: SessionStart / 훅 {label[r2]}: Stop")
+print(f"  훅 {label[r1]}: SessionStart / {label[r2]}: Stop / {label[r3]}: PostToolUse")
 PY
 
 echo "  훅 설정: ${HOOKS/#$HOME/\~}"
