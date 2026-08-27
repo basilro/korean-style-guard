@@ -39,6 +39,41 @@ EMOJI = re.compile(
 )
 
 
+# 본문 산문에서 서술어 없이 끝난 문장을 센다.
+# 헤딩과 목록과 표는 대상이 아니다. 한국어에서 제목과 목차는 명사구가 표준이다.
+CLOSERS = "다요까죠오네군"
+CONNECTIVES = ("하고", "이고", "으며", "하며", "인데", "는데", "지만", "아서",
+               "어서", "하여", "이며", "면서", "거나", "이나")
+
+
+def unfinished_sentences(body: str):
+    prose = []
+    for line in body.split("\n"):
+        t = line.strip()
+        if not t or t.startswith(("#", "-", "*", "|", ">", "=")):
+            continue
+        if re.match(r"^\d+\.", t):      # 번호 목록
+            continue
+        prose.append(t)
+    text = " ".join(prose)
+
+    bad = []
+    for raw in re.split(r"(?<=[.!?])\s+", text):
+        sent = raw.strip()
+        if len(sent) < 12 or not re.search(r"[가-힣]", sent):
+            continue
+        if not sent.endswith((".", "!", "?")):
+            continue
+        stem = sent.rstrip(".!?\"'\u201d\u2019) ").rstrip()
+        if not stem:
+            continue
+        if stem.endswith(CONNECTIVES):
+            bad.append(sent)
+        elif stem[-1] not in CLOSERS:
+            bad.append(sent)
+    return bad
+
+
 def check(text: str) -> dict:
     body = strip_noncounting(text)
     lines = body.split("\n")
@@ -55,6 +90,8 @@ def check(text: str) -> dict:
     bang = re.findall(r"(?<![!\s])!(?!\=)", body)
 
     # 헤딩의 개수 예고 틀
+    unfinished = unfinished_sentences(body)
+
     heads = [l for l in lines if re.match(r"^#{1,6}\s", l)]
     counted = [h for h in heads if re.search(r"(한|두|세|네|다섯|[0-9]+)\s*가지", h)]
 
@@ -76,6 +113,8 @@ def check(text: str) -> dict:
     add("느낌표", len(bang), 0)
     add("개수 예고 헤딩", len(counted), 1,
         " / ".join(h.strip()[:30] for h in counted[:3]))
+    add("서술어 없이 끝난 문장", len(unfinished), 2,
+        " / ".join(u[-26:] for u in unfinished[:3]))
 
     return {
         "위반": findings,
@@ -83,6 +122,7 @@ def check(text: str) -> dict:
         "계수": {
             "대시": len(dash), "볼드": len(bold_all), "이모지": len(emoji),
             "느낌표": len(bang), "개수예고헤딩": len(counted),
+            "미완결문장": len(unfinished),
             "검사한 글자수": len(body),
         },
     }

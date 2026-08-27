@@ -1,15 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "korean-style-guard",
-  "owner": { "name": "rumora" },
+  "owner": {
+    "name": "rumora"
+  },
   "description": "한국어 문체 보칙과 그 집행 장치.",
   "plugins": [
     {
       "name": "korean-style-guard",
       "source": "./",
-      "description": "한국어 출력의 서식·구조 보칙 8항목을 상시 주입하고 Stop hook 으로 검사한다.",
+      "description": "한국어 출력의 서식·구조 보칙 9항목을 상시 주입하고 Stop hook 으로 검사한다.",
       "license": "MIT",
-      "keywords": ["korean", "writing", "style", "hooks"]
+      "keywords": [
+        "korean",
+        "writing",
+        "style",
+        "hooks"
+      ]
     }
   ]
 }
