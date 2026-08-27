@@ -62,15 +62,25 @@ matcher 에 `clear` 와 `compact` 를 넣어 두어 `/clear` 뒤에도 다시 �
 
 ## 설치
 
-```bash
-/plugin marketplace add <이 저장소>
+세션 안에서 슬래시 명령으로 설치한다.
+
+```
+/plugin marketplace add basilro/korean-style-guard
 /plugin install korean-style-guard@korean-style-guard
 ```
 
-로컬 디렉터리에서 바로 쓸 수도 있다.
+터미널에서 CLI 로 해도 된다.
 
 ```bash
-/plugin marketplace add /path/to/korean-style-guard
+claude plugin marketplace add basilro/korean-style-guard
+claude plugin install korean-style-guard@korean-style-guard
+```
+
+갱신할 때는 마켓플레이스를 먼저 새로 받아야 새 버전이 보인다.
+
+```bash
+claude plugin marketplace update korean-style-guard
+claude plugin update korean-style-guard
 ```
 
 설치 후 새 세션부터 적용된다.
