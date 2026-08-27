@@ -93,6 +93,45 @@ claude plugin update korean-style-guard
 `~/.claude/settings.json` 의 `hooks.Stop` 에 걸면 로컬 소스에서도 검사가 돈다.
 원격 설치라면 필요 없다.
 
+## Codex CLI 에서 쓰기
+
+규칙과 검사기와 스킬은 그대로 옮겨간다. `SKILL.md` 형식이 같고, `SessionStart` 훅의
+출력 형식도 같다. `Stop` 훅만 출력 계약이 다른데, `scripts/stop_hook.py` 가 입력에
+`turn_id` 가 있는지 보고 알아서 갈라진다.
+
+```bash
+codex/install.sh
+```
+
+스킬을 `$CODEX_HOME/skills/ko-style/` 에 복사하고 `$CODEX_HOME/hooks.json` 에 훅 두 개를
+넣는다. 여러 번 돌려도 중복되지 않는다. `CODEX_HOME` 을 지정하면 그쪽에 설치한다.
+
+설치 뒤에 한 단계가 남는다. Codex 를 실행해 `/hooks` 에서 두 훅을 신뢰로 표시해야 한다.
+승인 전에는 실행되지 않는다.
+
+### Codex 는 플러그인에 훅을 담지 못한다
+
+Claude Code 와 갈리는 지점이다. `codex features list` 에서 `plugin_hooks` 가 `removed`
+상태이고, 번들된 `validate_plugin.py` 도 `plugin.json` 의 `hooks` 필드를 거부한다.
+그래서 Codex 쪽은 스킬과 훅을 따로 설치하는 두 단계가 된다.
+
+| | Claude Code | Codex |
+|---|---|---|
+| 스킬 형식 | `SKILL.md` | 같음 |
+| SessionStart 주입 | `hookSpecificOutput.additionalContext` | 같음 |
+| Stop 차단 | exit 2 + stderr | stdout `{"decision":"block","reason":...}` |
+| 플러그인이 훅을 담는가 | 담는다(원격 소스일 때) | 담지 못한다 |
+| 설치 | 플러그인 하나 | 스킬 + 훅 두 단계, 신뢰 승인 |
+
+`skills/ko-style/agents/openai.yaml` 은 Codex 전용 표면 메타데이터다. 표시 이름과 시작
+프롬프트를 담으며 다른 도구는 무시한다.
+
+### 확인한 것과 못 한 것
+
+격리한 `CODEX_HOME` 에서 `codex debug prompt-input` 으로 스킬 인식을 확인했다. 설치
+멱등성도 확인했다. 훅의 실제 발화는 확인하지 못했다. `codex debug prompt-input` 이 훅을
+실행하지 않아서, 검증하려면 토큰을 쓰는 세션이 필요하다.
+
 ## 단독 사용
 
 ```bash

@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/절대/경로/korean-style-guard/hooks/inject-rules.sh\"",
+            "timeoutSec": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/절대/경로/korean-style-guard/scripts/stop_hook.py\"",
+            "timeoutSec": 15
+          }
+        ]
+      }
+    ]
+  }
+}

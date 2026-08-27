@@ -1,0 +1,4 @@
+interface:
+  display_name: "한국어 문체 점검"
+  short_description: "한국어 글의 AI 티 나는 서식과 구조를 세어 보고 고친다"
+  default_prompt: "$ko-style 로 이 문서의 한국어 보칙 위반을 점검해줘."

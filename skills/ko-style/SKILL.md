@@ -26,9 +26,12 @@ license: MIT
 
 ## 점검만 할 때
 
+아래 경로는 이 스킬 디렉터리 기준이다. 절대 경로가 필요하면 스킬 본문 앞에 붙어 오는
+기준 디렉터리를 쓰거나 `${CLAUDE_PLUGIN_ROOT}/skills/ko-style/` 를 앞에 붙인다.
+
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ko_style_check.py" <파일>
-cat <파일> | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ko_style_check.py" --json
+python3 scripts/ko_style_check.py <파일>
+cat <파일> | python3 scripts/ko_style_check.py --json
 ```
 
 위반이 없으면 0, 있으면 1 로 끝난다.
