@@ -21,8 +21,7 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-output.sh\"",
             "shell": "bash",
-            "timeout": 15,
-            "statusMessage": "한국어 보칙 검사"
+            "timeout": 15
           }
         ]
       }
