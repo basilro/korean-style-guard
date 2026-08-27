@@ -15,24 +15,23 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ko_style_check import check  # noqa: E402
+from ko_style_check import check, format_report  # noqa: E402
 
 HANGUL = re.compile(r"[가-힣]")
 
+INSTRUCTION = (
+    "해당 부분을 고쳐서 답변을 다시 내주세요. 내용은 그대로 두고 서식만 바꿉니다.\n"
+    "고친 뒤에는 무엇을 고쳤는지 한 줄로만 알리고 전체를 다시 설명하지 마세요."
+)
+
 
 def build_reason(result: dict) -> str:
-    lines = ["직전 답변이 한국어 보칙을 어겼습니다.", "보칙 위반"]
-    for f in result["위반"]:
-        line = f"  {f['항목']}: {f['검출']}건 (허용 {f['허용']})"
-        if f["상세"]:
-            line += f"  ← {f['상세']}"
-        lines.append(line)
-    lines += [
+    return "\n".join([
+        "직전 답변이 한국어 보칙을 어겼습니다.",
+        format_report(result),
         "",
-        "해당 부분을 고쳐서 답변을 다시 내주세요. 내용은 그대로 두고 서식만 바꿉니다.",
-        "고친 뒤에는 무엇을 고쳤는지 한 줄로만 알리고 전체를 다시 설명하지 마세요.",
-    ]
-    return "\n".join(lines)
+        INSTRUCTION,
+    ])
 
 
 def main() -> int:
@@ -54,7 +53,7 @@ def main() -> int:
         return 0
 
     result = check(message)
-    if result["통과"]:
+    if result["passed"]:
         return 0
 
     reason = build_reason(result)

@@ -48,9 +48,9 @@ def put(event, entry):
         for h in group.get("hooks", []):
             if "korean-style-guard" in h.get("command", "") or h.get("command") == cmd:
                 h.update(entry["hooks"][0])
-                return "갱신"
+                return "updated"
     lst.append(entry)
-    return "추가"
+    return "added"
 
 r1 = put("SessionStart", {
     "matcher": "startup|clear|compact",
@@ -63,7 +63,8 @@ r2 = put("Stop", {
 with open(hooks_path, "w", encoding="utf-8") as fh:
     json.dump(cfg, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
-print(f"  훅 {r1}: SessionStart / 훅 {r2}: Stop")
+label = {"added": "추가", "updated": "갱신"}
+print(f"  훅 {label[r1]}: SessionStart / 훅 {label[r2]}: Stop")
 PY
 
 echo "  훅 설정: ${HOOKS/#$HOME/\~}"
