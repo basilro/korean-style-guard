@@ -36,9 +36,8 @@ Codex CLI 에서 쓴다.
 
 ### output style 이 아닌 이유
 
-output style 은 설계상 메인 대화에만 적용된다.
-서브에이전트 20개 전수와 cron 세션에 리마인더가 0건인 것을 실측으로 확인했다.
-3항이 겨냥한 것이 정확히 그 경로다.
+output style 은 설계상 메인 대화에만 적용된다. 서브에이전트와 헤드리스 실행과 cron 에는
+걸리지 않는다. 3항이 겨냥한 것이 정확히 그 경로다.
 
 ### SessionStart 훅으로 주입하는 이유
 
@@ -48,8 +47,7 @@ matcher 에 `clear` 와 `compact` 를 넣어 두어 `/clear` 뒤에도 다시 �
 
 ### Stop 훅이 필요한 이유
 
-규칙만 적어 두면 지켜지지 않는다.
-엠대시를 금지하는 지침이 이미 있는 환경에서도 실측하면 계속 나온다.
+규칙만 적어 두면 지켜지지 않는다. 엠대시를 금지하는 지침이 이미 있어도 계속 나온다.
 
 ## Claude Code 에서 쓰기
 
@@ -76,23 +74,13 @@ claude plugin update korean-style-guard
 
 설치 후 새 세션부터 적용된다.
 
-### 원격 소스로 설치해야 한다
+### 원격 소스로 설치한다
 
-로컬 디렉터리를 마켓플레이스 소스로 등록하면 `SessionStart` 훅만 붙고 `Stop` 훅은 등록되지
-않는다. 같은 커밋을 GitHub 소스로 설치하면 둘 다 정상 발동한다. 실측 결과다.
+로컬 디렉터리를 마켓플레이스 소스로 등록하면 `Stop` 훅이 등록되지 않는다. 원격에
+올린 뒤 그쪽을 소스로 설치한다.
 
-| 마켓플레이스 소스 | SessionStart | Stop |
-|---|---|---|
-| `directory` (로컬 경로) | 발동 | 발동하지 않음 |
-| `github` (원격) | 발동 | 발동 |
-
-같은 스크립트, 같은 `hooks.json`, 같은 세션 유형에서 소스 종류만 바꿔 비교했다.
-`directory` 소스로 개발하다가 훅이 안 붙는다면 이것이 원인이다. 원격에 올리고
-다시 설치하면 해결된다.
-
-동봉된 `hooks/settings-bridge.sh` 는 그 상황에서 쓰는 우회책이다.
-`~/.claude/settings.json` 의 `hooks.Stop` 에 걸면 로컬 소스에서도 검사가 돈다.
-원격 설치라면 필요 없다.
+로컬 소스로 개발하는 동안에는 동봉된 `hooks/settings-bridge.sh` 를 쓴다.
+`~/.claude/settings.json` 의 `hooks.Stop` 에 걸면 검사가 돈다. 원격 설치라면 필요 없다.
 
 ## Codex CLI 에서 쓰기
 
@@ -112,12 +100,6 @@ codex/install.sh
 
 `skills/ko-style/agents/openai.yaml` 은 Codex 표면 메타데이터다. 표시 이름과 시작
 프롬프트를 담는다.
-
-### 확인한 것과 못 한 것
-
-격리한 `CODEX_HOME` 에서 `codex debug prompt-input` 으로 스킬 인식을 확인했다. 설치
-멱등성도 확인했다. 훅의 실제 발화는 확인하지 못했다. `codex debug prompt-input` 이 훅을
-실행하지 않아서, 검증하려면 토큰을 쓰는 세션이 필요하다.
 
 ## 단독 사용
 
