@@ -75,46 +75,23 @@ fluent-korean 구 단위 4조가 엠대시를 금지하는데도 표본에 58회
 
 설치 후 새 세션부터 적용된다.
 
-### Stop 훅은 한 줄을 더 걸어야 한다
+### 원격 소스로 설치해야 한다
 
-이 플러그인의 `SessionStart` 훅은 설치만으로 동작한다. 그런데 `Stop` 훅은 플러그인에서
-선언해도 등록되지 않는다. 문서에는 플러그인이 모든 훅 이벤트를 지원한다고 적혀 있으나,
-실측으로는 다음이 확인됐다.
+로컬 디렉터리를 마켓플레이스 소스로 등록하면 `SessionStart` 훅만 붙고 `Stop` 훅은 등록되지
+않는다. 같은 커밋을 GitHub 소스로 설치하면 둘 다 정상 발동한다. 실측 결과다.
 
-| 등록 경로 | SessionStart | Stop |
+| 마켓플레이스 소스 | SessionStart | Stop |
 |---|---|---|
-| 플러그인 `hooks/hooks.json` | 발동 | **발동하지 않음** |
-| `~/.claude/settings.json` | 발동 | 발동 |
+| `directory` (로컬 경로) | 발동 | 발동하지 않음 |
+| `github` (원격) | 발동 | 발동 |
 
-같은 스크립트를 두 경로에 각각 걸어 비교했고, matcher 유무와 `shell`·`statusMessage`
-필드 제거, 기록 줄을 첫 줄로 옮기기까지 시도했으나 결과는 같았다.
+같은 스크립트, 같은 `hooks.json`, 같은 세션 유형에서 소스 종류만 바꿔 비교했다.
+`directory` 소스로 개발하다가 훅이 안 붙는다면 이것이 원인이다. 원격에 올리고
+다시 설치하면 해결된다.
 
-그래서 `~/.claude/settings.json` 에 연결자 한 줄을 건다. 실제 로직은 플러그인 안에 남는다.
-
-```bash
-mkdir -p ~/.claude/hooks
-cp hooks/settings-bridge.sh ~/.claude/hooks/ko-style-stop.sh
-chmod +x ~/.claude/hooks/ko-style-stop.sh
-```
-
-그리고 `~/.claude/settings.json` 에 이렇게 넣는다.
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      { "hooks": [ { "type": "command", "command": "$HOME/.claude/hooks/ko-style-stop.sh", "timeout": 15 } ] }
-    ]
-  }
-}
-```
-
-연결자는 설치된 플러그인 캐시에서 가장 높은 버전을 매번 찾으므로, 플러그인을 업데이트해도
-따로 손댈 필요가 없다.
-
-Stop 훅 없이 `SessionStart` 주입만으로도 상당 부분 지켜진다. 실측에서 모델이 주입된 보칙을
-읽고 스스로 엠대시를 콜론으로 바꿨다. 다만 조항만으로는 새는 경우가 있다는 것이
-이 플러그인을 만든 이유이므로, 연결자를 거는 편을 권한다.
+동봉된 `hooks/settings-bridge.sh` 는 그 상황에서 쓰는 우회책이다.
+`~/.claude/settings.json` 의 `hooks.Stop` 에 걸면 로컬 소스에서도 검사가 돈다.
+원격 설치라면 필요 없다.
 
 ## 단독 사용
 
