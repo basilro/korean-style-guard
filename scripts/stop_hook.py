@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook 본체. 훅 입력 JSON 을 stdin 으로 받아 보칙 위반을 센다.
 
-위반이 있으면 stderr 에 보고를 적고 2 로 끝낸다. Claude 는 그 내용을
+위반이 있으면 stderr 에 보고를 적고 2 로 끝낸다. 모델은 그 내용을
 다음 지시로 받아 답변을 고쳐서 다시 낸다.
 """
 import json
