@@ -9,7 +9,7 @@
     {
       "name": "korean-style-guard",
       "source": "./",
-      "description": "한국어 출력의 서식·구조 보칙 9항목을 상시 주입하고 Stop hook 으로 검사한다.",
+      "description": "한국어 출력의 서식·구조 보칙 9항목을 상시 주입하고, 대화 답변과 도구로 쓴 파일을 훅으로 검사한다. Claude Code 와 Codex CLI 에서 쓴다.",
       "license": "MIT",
       "keywords": [
         "korean",
