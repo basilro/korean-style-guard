@@ -176,12 +176,22 @@ CODE_BEFORE_BRACE = set(")=,(;[{&|?")
 BLOCK_WORDS = {"else", "try", "do", "return", "finally", "catch", "new"}
 
 # 나눗셈이 아니라 정규식 리터럴이 올 수 있는 자리를 가린다.
+CODE_WORDS = {
+    "const", "let", "var", "return", "export", "import", "function", "class",
+    "if", "else", "for", "while", "switch", "case", "default", "type",
+    "interface", "enum", "await", "async", "new", "throw", "try", "catch",
+    "finally", "do", "public", "private", "protected", "static", "yield",
+}
 REGEX_PREFIX = set("(,=:[!&|?{};+-*%<>~^")
 REGEX_WORDS = {"return", "typeof", "case", "in", "of", "do", "else",
                "yield", "await", "new", "delete", "void"}
 
 
 def _regex_allowed(text: str, i: int) -> bool:
+    # 정규식은 공백으로 시작하지 않는다. 공백을 찾을 때도 \s 를 쓴다.
+    # 화면 글 사이에 홀로 놓인 빗금을 정규식으로 읽으면 뒤쪽을 통째로 삼킨다.
+    if i + 1 < len(text) and text[i + 1] in " \t":
+        return False
     j = i - 1
     while j >= 0 and text[j] in " \t":
         j -= 1
@@ -333,34 +343,82 @@ def _mask_python(text: str):
     return "".join(lines)
 
 
-def _is_tag_close(text: str, i: int) -> bool:
-    """이 꺾쇠가 여는 태그의 끝인지 본다.
+def _text_before(text: str, k: int) -> bool:
+    """이 자리 앞이 화면 글인지 본다.
 
-    뒤로 훑어 여는 꺾쇠를 먼저 만나야 태그다.
+    글 안에서 괄호를 열었다면 그 앞은 글자이거나 태그의 끝이거나 줄의 처음이다.
+    코드에서 괄호를 열었다면 그 앞에 이름이나 닫는 괄호가 붙어 있다.
+    """
+    j = k - 1
+    while j >= 0 and text[j] in " \t":
+        j -= 1
+    if j < 0 or text[j] == "\n":
+        return True
+    return bool(HANGUL.match(text[j]) or text[j] == ">")
+
+
+def _text_continues(text: str, k: int) -> bool:
+    """다음 줄이 앞줄의 화면 글에 이어지는지 본다.
+
+    한글로 시작하고 코드의 기호가 없는 줄만 같은 글로 본다.
+    코드 블록의 끝을 표현식의 끝으로 잘못 읽었을 때
+    뒤따르는 코드까지 지워 거기 있는 한글 이름을 놓치는 일을 막는다.
+    """
+    while k < len(text) and text[k] in " \t":
+        k += 1
+    if k >= len(text):
+        return False
+    end = text.find("\n", k)
+    line = text[k:end if end >= 0 else len(text)]
+    if not HANGUL.search(line) or line[0] in "});":
+        return False
+    word = re.match(r"[0-9A-Za-z_$가-힣]+", line)
+    if word is None or word.group(0) in CODE_WORDS:
+        return False
+    # 이름 뒤에 대입이나 호출이나 속성이 붙으면 코드다.
+    return not re.match(r"\s*[=(]|\.[A-Za-z_$가-힣]", line[word.end():])
+
+
+def _tag_open_at(text: str, i: int, pairs: dict) -> int:
+    """이 꺾쇠가 태그의 끝이면 짝이 되는 여는 꺾쇠의 자리를 준다.
+
+    뒤로 훑어 여는 꺾쇠를 먼저 만나야 태그이고, 태그가 아니면 -1을 준다.
     닫는 꺾쇠를 먼저 만나면 앞선 태그가 이미 닫힌 자리이므로 태그가 아니다.
     다만 화살표 함수와 크거나같음의 꺾쇠는 속성 안에 흔히 놓이므로 지나친다.
+    속성값으로 준 중괄호 안에는 완결된 태그가 통째로 들어앉는 일이 잦으므로,
+    닫는 중괄호를 만나면 짝이 되는 여는 중괄호까지 건너뛴다.
     """
     n = len(text)
     j = i - 1
     breaks = 0
     while j >= 0:
         c = text[j]
+        if c == "}":
+            op = pairs.get(j)
+            if op is None:
+                return -1
+            j = op - 1
+            continue
         if c == ">":
             arrow = j and text[j - 1] in "=-"
             ge = j + 1 < n and text[j + 1] == "="
             if arrow or ge:
                 j -= 1
                 continue
-            return False
+            return -1
         if c == "<":
             nxt = text[j + 1] if j + 1 < n else ""
-            return nxt.isalpha() or nxt in "/>_$"
+            if nxt.isalpha() or nxt in "/>_$":
+                return j
+            # 속성 안에 놓인 크다작다 비교이므로 지나친다.
+            j -= 1
+            continue
         if c == "\n":
             breaks += 1
             if breaks > 20:
-                return False
+                return -1
         j -= 1
-    return False
+    return -1
 
 
 def _mask_markup(text: str) -> str:
@@ -413,6 +471,12 @@ def _mask_markup(text: str) -> str:
         if c == ":":
             # 객체의 값 자리인지, 글 안의 쌍점인지 앞 글자로 가른다.
             return bool(k and HANGUL.search(text[k - 1]))
+        if c == "(":
+            # 글 안에 괄호를 열고 값을 끼워 넣는 문장이 흔하다.
+            return _text_before(text, k)
+        if c == "=":
+            # 속성은 이름에 바로 붙지만 글 안의 등호는 앞이 비어 있다.
+            return bool(k and text[k - 1] in " \t")
         if c in CODE_BEFORE_BRACE:
             return False
         word = re.search(r"[A-Za-z_$]+$", text[max(0, k - 15):k + 1])
@@ -421,26 +485,52 @@ def _mask_markup(text: str) -> str:
     i = 0
     while i < n:
         c = text[i]
-        opens_text = (
-            (c == ">" and not (i and text[i - 1] in "=->")
-             and _is_tag_close(text, i))
-            or (c == "}" and is_expr_close(i))
-        )
+        opens_text = False
+        # 줄이 바뀌면 글이 끝난 것으로 볼 자리인지 함께 정한다.
+        # 코드 블록의 끝이나 화면 글의 끝을 잘못 읽었을 때
+        # 뒤따르는 코드까지 지우면 거기 있는 한글 이름을 놓치기 때문이다.
+        one_line = False
+        if c == ">" and not (i and text[i - 1] in "=->"):
+            k = _tag_open_at(text, i, pairs)
+            if k >= 0:
+                opens_text = True
+                # 여는 태그 뒤의 글은 여러 줄에 걸치지만,
+                # 닫는 태그와 홀로 닫는 태그 뒤는 코드로 돌아가는 자리가 많다.
+                one_line = text[k + 1] == "/" or text[i - 1] == "/"
+        elif c == "}" and is_expr_close(i):
+            opens_text = True
+            one_line = True
         if not opens_text:
             i += 1
             continue
         j = i + 1
         # 뒤따르는 태그의 끝을 삼키지 않도록 꺾쇠에서도 끊고 다시 판정한다.
-        while j < n and text[j] not in "<{>":
+        while j < n:
+            ch = text[j]
+            if ch in "<{>}":
+                break
+            if ch == "\n" and one_line and not _text_continues(text, j + 1):
+                break
             j += 1
-        wipe(i + 1, j)
+        # 끝을 못 찾고 파일 끝에 닿았다면 화면 글이 아니다.
+        # 화면 글이라면 닫는 태그가 반드시 뒤따른다.
+        if j < n:
+            wipe(i + 1, j)
         i = j if j > i else i + 1
     return "".join(chars)
+
+
+# 사람이 손으로 쓴 소스는 이 크기를 넘지 않는다.
+# 넘는 파일은 번들이나 생성물이라 검사할 이름이 없고,
+# 한 줄로 뭉친 5메가짜리를 훑으면 편집마다 몇 초씩 붙는다.
+MAX_BYTES = 1_000_000
 
 
 def masked_code(text: str, ext: str):
     lang = EXT_LANG.get(ext.lower())
     if lang is None:
+        return None
+    if len(text) > MAX_BYTES:
         return None
     prof = PROFILES[lang]
     body = _mask_python(text) if lang == "python" else None
