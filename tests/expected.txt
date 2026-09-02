@@ -1,0 +1,39 @@
+# 한글 이름 검사기의 회귀 시험 기대값이다.
+# 왼쪽은 잡아야 하면 hit, 넘겨야 하면 pass 이고 오른쪽은 케이스 파일이다.
+# 케이스마다 왜 그렇게 갈려야 하는지 뒤에 적었다.
+
+hit  arrow_jsx.tsx          화면 글 사이에 낀 한글 변수
+hit  broken.py              문법 오류라 tokenize 가 실패해도 폴백으로 잡는다
+hit  class_block.tsx        클래스 블록의 닫는 중괄호를 표현식 끝으로 읽지 않는다
+hit  code_after_jsx.tsx     반환문이 닫힌 뒤에 놓인 한글 변수와 함수
+hit  cols.sql               주석은 넘기고 컬럼 이름은 잡는다
+hit  compare_gt.tsx         꺾쇠 비교 연산자를 태그로 읽지 않는다
+hit  csharp_raw.cs          축자 문자열은 넘기고 필드 이름은 잡는다
+hit  decrement.js           감소 연산자를 정규식 시작으로 읽지 않는다
+hit  go_raw.go              백틱 원문은 넘기고 변수 이름은 잡는다
+hit  hangul_key.ts          객체의 한글 키
+hit  iife_arg.jsx           즉시 실행 함수의 인자로 준 객체의 한글 키
+hit  map_in_text.tsx        화면 글 다음 줄의 map 안에 든 한글 이름
+hit  nested_attr_object.tsx 속성값 객체와 배열에 든 한글 이름
+hit  object_array.tsx       객체 배열의 한글 키
+hit  php_hash.php           우물 정 주석은 넘기고 변수 이름은 잡는다
+hit  ruby_doc.rb            여러 줄 주석은 넘기고 메서드 이름은 잡는다
+hit  rust_raw.rs            raw string 은 넘기고 변수 이름은 잡는다
+hit  attr_after_text.tsx    화면 글 다음 줄의 한글 속성 접근
+hit  한글파일명.py            파일 이름 자체가 한글이다
+
+pass comment_quote.py       주석 안의 홀따옴표가 짝을 밀지 않는다
+pass dart_nested.dart       보간 안에 다시 든 따옴표
+pass expr_then_text.jsx     표현식 뒤에 바로 붙은 화면 글
+pass fstring_nest.py        f-string 안에 다시 든 따옴표
+pass jsx_text.jsx           태그 사이의 화면 글과 단편 조각
+pass kotlin_tpl.kt          문자열 템플릿의 달러 보간
+pass multiline_text.jsx     여러 줄에 걸친 화면 글
+pass selfclose.jsx          홀로 닫는 태그 앞뒤의 화면 글
+pass swift_interp.swift     역슬래시 괄호 보간
+
+# 아래 둘은 알고 넘기는 미탐이다.
+# JSX 의 글 자리에 코드가 벌거벗고 놓인 모양인데, 그렇게 쓰면
+# 코드로 돌지 않고 화면에 글자로 나온다. 실제로는 생기지 않는다.
+pass bare_call_in_text.tsx  화면 글 자리의 호출문
+pass bare_decl_in_text.tsx  화면 글 자리의 선언문

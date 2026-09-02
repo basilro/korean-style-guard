@@ -16,6 +16,7 @@ Codex 에서 쓴다.
 | `scripts/ko_identifier_check.py` | 코드에 든 한글 이름 검사기. 단독으로도 쓴다 |
 | `skills/ko-style/` | 이미 쓰인 글을 점검하고 고치는 스킬 |
 | `commands/ko-check.md` | `/ko-check [파일]` 슬래시 명령 |
+| `tests/` | 이름 검사기의 회귀 시험 30종 |
 
 ## 보칙 9항목
 
@@ -144,6 +145,17 @@ python3 scripts/ko_identifier_check.py 파일.tsx --json
 
 위반이 없으면 0, 있으면 1 로 끝난다.
 이름 검사기는 확장자로 언어를 가리므로 표준 입력을 받지 않는다.
+
+## 회귀 시험
+
+```bash
+python3 tests/run_identifier_tests.py
+```
+
+`tests/cases/` 에 마스킹이 무너지기 쉬운 자리를 골라 30종을 모아 두었다.
+JSX 의 화면 글, 문자열 보간, 축자 문자열, 정규식 리터럴, 문법 오류 파일이 여기 든다.
+기대값과 그 근거는 `tests/expected.txt` 에 적혀 있다.
+이름 검사기를 손보면 이 시험을 먼저 돌린다.
 
 ## 전제
 
