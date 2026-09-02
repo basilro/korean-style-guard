@@ -11,8 +11,9 @@ Codex 에서 쓴다.
 | `rules/ko-style-rules.md` | 보칙 본문 9항목. 단일 출처 |
 | `hooks/inject-rules.sh` | SessionStart 훅. 보칙을 세션 컨텍스트에 주입 |
 | `hooks/check-output.sh` | Stop 훅. 대화 답변을 검사해 위반 시 재작성을 요구 |
-| `hooks/check-written-file.sh` | PostToolUse 훅. 방금 쓴 산문 파일을 검사 |
-| `scripts/ko_style_check.py` | 계수기. 단독으로도 쓴다 |
+| `hooks/check-written-file.sh` | PostToolUse 훅. 방금 쓴 파일을 검사 |
+| `scripts/ko_style_check.py` | 산문 서식 계수기. 단독으로도 쓴다 |
+| `scripts/ko_identifier_check.py` | 코드에 든 한글 이름 검사기. 단독으로도 쓴다 |
 | `skills/ko-style/` | 이미 쓰인 글을 점검하고 고치는 스킬 |
 | `commands/ko-check.md` | `/ko-check [파일]` 슬래시 명령 |
 
@@ -55,13 +56,30 @@ matcher 에 `clear` 와 `compact` 를 넣어 두어 `/clear` 뒤에도 다시 �
 Stop 훅은 대화 답변만 본다. 도구로 쓴 파일은 그 시야 밖이므로 PostToolUse 훅이 맡는다.
 `Write` 와 `Edit` 뒤에 방금 쓴 파일을 검사한다.
 
-파일 쪽은 대상을 좁게 잡는다. 코드에 서식 규칙을 들이대면 오탐이 쏟아지기 때문이다.
+파일은 종류에 따라 다른 것을 본다. 두 검사의 조건이 정반대라 서로 넘어가지 않게 가른다.
+
+산문 문서는 서식을 본다.
 
 - 확장자가 `.md` `.markdown` `.mdx` `.txt` `.rst` 인 것만 본다
 - 한글 비율이 15% 를 넘고 100자 이상인 파일만 본다
-- `.git` `node_modules` `vendor` `dist` `build` 같은 트리는 건너뛴다
+
+코드 파일은 이름을 본다. 보칙 첫 문단이 식별자와 딕셔너리 키와 열거형 값과 파일명을
+영문으로 쓰라고 정하는데, 지침만으로는 지켜지지 않아 계수기를 붙였다.
+
+- 파이썬과 자바스크립트 계열, 자바, 코틀린, 스위프트, 다트, C, C++, C#, 고, 러스트,
+  PHP, 루비, SQL 을 본다
+- 주석과 문자열 리터럴을 지우고 남은 코드에서만 한글을 찾는다
+- 파이썬은 표준 `tokenize` 로 지우고, 나머지는 언어별 프로파일을 쓰는 스캐너로 지운다
+- 화면에 보이는 글을 위반으로 잡지 않으려고 JSX 텍스트와 문자열 보간과 정규식 리터럴을
+  따로 다룬다. 실제 코드베이스 936개 파일에서 오탐 2건이다
+- 문자열 안의 한글은 세지 않는다. 한글 딕셔너리 키를 놓치지만, 오탐으로 훅을 꺼 버리게
+  만드는 쪽이 더 나쁘다고 봤다
+
+두 검사 모두 `.git` `node_modules` `vendor` `dist` `build` 같은 트리는 건너뛴다.
 
 파일 검사를 끄려면 `KO_STYLE_SKIP_FILES=1` 을 환경 변수로 둔다.
+이름 검사만 끄려면 `KO_STYLE_SKIP_IDENTIFIERS=1` 을 둔다.
+프로젝트의 기존 관례가 한글 이름인 경우를 위한 스위치다.
 
 ## Claude Code 에서 쓰기
 
@@ -120,9 +138,12 @@ codex/install.sh
 ```bash
 python3 scripts/ko_style_check.py 파일.md
 cat 파일.md | python3 scripts/ko_style_check.py --json
+python3 scripts/ko_identifier_check.py 파일.cs
+python3 scripts/ko_identifier_check.py 파일.tsx --json
 ```
 
 위반이 없으면 0, 있으면 1 로 끝난다.
+이름 검사기는 확장자로 언어를 가리므로 표준 입력을 받지 않는다.
 
 ## 전제
 
