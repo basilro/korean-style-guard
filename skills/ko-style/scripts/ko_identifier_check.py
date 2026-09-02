@@ -172,7 +172,7 @@ def _scan_template(text: str, start: int, interp: bool) -> int:
 
 
 # 중괄호 앞에 이것들이 오면 코드 블록이거나 객체 리터럴이다.
-CODE_BEFORE_BRACE = set(")=,(;[{&|?")
+CODE_BEFORE_BRACE = set(")=(;[{&|?")
 BLOCK_WORDS = {"else", "try", "do", "return", "finally", "catch", "new"}
 
 # 나눗셈이 아니라 정규식 리터럴이 올 수 있는 자리를 가린다.
@@ -354,7 +354,8 @@ def _text_before(text: str, k: int) -> bool:
         j -= 1
     if j < 0 or text[j] == "\n":
         return True
-    return bool(HANGUL.match(text[j]) or text[j] == ">")
+    # 앞에 끼워 넣은 값이 끝난 자리도 글의 한가운데다.
+    return bool(HANGUL.match(text[j]) or text[j] in ">}")
 
 
 def _text_continues(text: str, k: int) -> bool:
@@ -370,13 +371,22 @@ def _text_continues(text: str, k: int) -> bool:
         return False
     end = text.find("\n", k)
     line = text[k:end if end >= 0 else len(text)]
-    if not HANGUL.search(line) or line[0] in "});":
+    if not HANGUL.search(line):
         return False
-    word = re.match(r"[0-9A-Za-z_$가-힣]+", line)
-    if word is None or word.group(0) in CODE_WORDS:
+    # 줄머리가 글이면 앞에 붙은 것은 줄표나 따옴표 같은 문장부호뿐이다.
+    head = re.search(r"[0-9A-Za-z_$가-힣]", line)
+    if head is None or re.search(r"[(){}\[\];=<>]", line[:head.start()]):
         return False
-    # 이름 뒤에 대입이나 호출이나 속성이 붙으면 코드다.
-    return not re.match(r"\s*[=(]|\.[A-Za-z_$가-힣]", line[word.end():])
+    rest = line[head.start():]
+    word = re.match(r"[0-9A-Za-z_$가-힣]+", rest).group(0)
+    if word in CODE_WORDS:
+        return False
+    tail = rest[len(word):]
+    # 이름 뒤에 대입이나 속성이 붙으면 코드다.
+    if re.match(r"\s*=|\.[A-Za-z_$가-힣]", tail):
+        return False
+    # 괄호는 영문 이름 뒤에서만 호출로 본다. 한국어 문장은 괄호로 덧붙인다.
+    return not (tail.startswith("(") and not HANGUL.search(word))
 
 
 def _tag_open_at(text: str, i: int, pairs: dict) -> int:
@@ -468,8 +478,8 @@ def _mask_markup(text: str) -> str:
         if c == ">":
             # 화살표 뒤의 중괄호는 함수 본문이다.
             return not (k and text[k - 1] in "=-")
-        if c == ":":
-            # 객체의 값 자리인지, 글 안의 쌍점인지 앞 글자로 가른다.
+        if c in ":,":
+            # 객체나 인자 목록의 구분인지, 글 안의 문장부호인지 앞 글자로 가른다.
             return bool(k and HANGUL.search(text[k - 1]))
         if c == "(":
             # 글 안에 괄호를 열고 값을 끼워 넣는 문장이 흔하다.
