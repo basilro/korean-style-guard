@@ -37,6 +37,47 @@ CONNECTIVES = ("하고", "이고", "으며", "하며", "인데", "는데", "지�
                "어서", "하여", "이며", "면서", "거나", "이나")
 
 
+# 부정 대구. "A가 아니라 B", "~것은 아니다". im-not-ai 실측에서 사람 글의 12배였고
+# 모델과 과업을 바꿔도 흔들리지 않은 유일한 신호다. 첨가의 "뿐(만) 아니라"는 대구가 아니다.
+CONTRAST = re.compile(
+    r"(?<!뿐만 )(?<!뿐 )(?<!뿐만)(?<!뿐)아니라(?![가-힣])"
+    r"|것(?:은|이)\s?(?:아니다|아닙니다|아니에요|아니죠)"
+)
+
+# 연결어미 바로 뒤의 쉼표. KatFish(ACL 2025)에서 사람과 LLM 을 가장 잘 가른 표기 신호다.
+# 명사로 끝나는 말(보고, 참고, 사고)을 잡지 않도록 어미 형태를 좁혀 둔다.
+COMMA_ENDINGS = ("하고", "되고", "이고", "있고", "없고", "았고", "었고", "했고", "였고",
+                 "겠고", "지고", "으며", "하며", "이며", "되며", "지만", "면서",
+                 "아서", "어서", "해서", "되어서", "는데", "은데", "인데")
+# 문두 접속사는 연결어미가 아니다.
+COMMA_EXEMPT = ("그리고", "그래서", "그런데", "하지만", "그러면서", "그러고")
+COMMA_AFTER = re.compile(r"([가-힣]+),")
+
+# 문단 끝의 당위. 앞에서 한 번 쓰면 충분한데 문단마다 같은 자리에 되풀이된다.
+OBLIGATION = re.compile(
+    r"(?:야\s?(?:한다|합니다|해요|하죠)|필요가\s?있(?:다|습니다|어요))"
+    r"[.!]?[\"'”’)]*$"
+)
+
+
+def prose_paragraphs(body: str):
+    """헤딩과 목록과 표를 뺀 본문 문단을 돌려준다."""
+    paras, cur = [], []
+    for line in body.split("\n"):
+        t = line.strip()
+        skip = (not t or t.startswith(("#", "-", "*", "|", ">", "="))
+                or re.match(r"^\d+[.)]", t))
+        if skip:
+            if cur:
+                paras.append(" ".join(cur))
+                cur = []
+            continue
+        cur.append(t)
+    if cur:
+        paras.append(" ".join(cur))
+    return paras
+
+
 def strip_noncounting(text: str) -> str:
     out = text
     for pat in MASKS:
@@ -90,6 +131,12 @@ def check(text: str) -> dict:
 
     unfinished = unfinished_sentences(body)
 
+    contrast = CONTRAST.findall(body)
+    comma_after = [w for w in COMMA_AFTER.findall(body)
+                   if w.endswith(COMMA_ENDINGS) and w not in COMMA_EXEMPT]
+    colon_heads = [h for h in heads if re.search(r"\S\s*[:：]\s+\S", h)]
+    obligation = [p for p in prose_paragraphs(body) if OBLIGATION.search(p)]
+
     violations = []
 
     def add(label, items, limit, detail=""):
@@ -113,6 +160,13 @@ def check(text: str) -> dict:
         " / ".join(h.strip()[:30] for h in counted[:3]))
     add("서술어 없이 끝난 문장", unfinished, 2,
         " / ".join(u[-26:] for u in unfinished[:3]))
+    add("부정 대구 (A가 아니라 B)", contrast, 1)
+    add("연결어미 뒤 쉼표", comma_after, 5,
+        " / ".join(w + "," for w in comma_after[:4]))
+    add("콜론 부제 헤딩 (X: Y)", colon_heads, 1,
+        " / ".join(h.strip()[:30] for h in colon_heads[:3]))
+    add("당위로 끝나는 문단", obligation, 2,
+        " / ".join(p[-26:] for p in obligation[:3]))
 
     return {
         "violations": violations,
@@ -124,6 +178,10 @@ def check(text: str) -> dict:
             "exclamation": len(bang),
             "counted_headings": len(counted),
             "unfinished_sentences": len(unfinished),
+            "negative_contrast": len(contrast),
+            "comma_after_connective": len(comma_after),
+            "colon_headings": len(colon_heads),
+            "obligation_paragraphs": len(obligation),
             "checked_chars": len(body),
         },
     }
