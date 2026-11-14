@@ -62,7 +62,8 @@ OBLIGATION = re.compile(
 
 # 어휘 항목. im-not-ai 의 사람 60편 대 AI 99편 대조(2026-08-29)와 사람 532편 실측에서
 # 사람 쪽이 0건이거나 AI 쪽이 몇 배 많고, 모델을 바꿔도 방향이 유지된 것만 넣는다.
-# 사람이 더 많이 쓴 것(~를 통해, ~에 대해, 것이다 결말, 문두 접속사)은 일부러 뺐다.
+# 사람이 더 많이 쓴 것(~를 통해, ~에 대해, 것이다 결말, 문두 접속사)은 AI 판별 신호가 못 되므로
+# 여기 두지 않고, 아래 번역투 절에서 빈도 상한으로 따로 센다.
 
 # 분열문 강조 (D-8). "필요한 것은 X다", "핵심은 X다". 사람 0.09 대 AI 0.92, 약 10배.
 CLEFT = re.compile(
@@ -101,6 +102,65 @@ HOLLOW_CAVEAT = re.compile(
 # 위치를 빼면 사람도 쓰지만, 결말 위치에서는 사람 0건 대 AI 12편이었다.
 HORIZON = re.compile(r"^(?:향후|앞으로|장기적으로|중장기적으로|머지않아)(?:는|에는)?[\s,]")
 
+
+# 번역투. 여기부터는 AI 판별 신호가 아니라 자연스러운 한국어의 기준이다.
+# 근거는 김정우(2003, 2007), 이근희(2005), 김순영(2012, 새국어생활 22-1), 이희재(2009).
+# 사람 글에도 흔하므로 0건을 요구하지 않고 되풀이만 잡는다.
+
+# 영어 전치사(about, through, from, by, in)를 옮긴 조사 구.
+# "에 있어서"는 "방에 있어서"(존재)와 겹치므로 보조사나 쉼표가 붙은 꼴과 "데 있어서"만 센다.
+PREP_CALQUE = re.compile(
+    r"에\s?(?:대해(?:서)?|대한|관해(?:서)?|관한|의해(?:서)?|의한)(?![가-힣])"
+    r"|(?:을|를)\s?통(?:해(?:서)?|한|하여)(?![가-힣])"
+    r"|로부터"
+    r"|에\s?있어서?(?:는|도|,)"
+    r"|데\s?있어(?:서)?(?:는|도)?(?![가-힣])"
+)
+
+# have 를 옮긴 소유 구문. "인자를 가지고 있다", "권한을 가진".
+POSSESS = re.compile(r"(?:을|를)\s?(?:가지고\s?있|가진(?=\s)|갖고\s?있)")
+
+# 피동을 두 번 겹친 꼴. 되다/보이다/쓰이다/잊히다로 충분하다.
+DOUBLE_PASSIVE = re.compile(
+    r"(?:되어|보여|쓰여|잊혀|읽혀|불려|믿겨|짜여|놓여|닫혀|열려|잡혀|찢겨)(?:지|져|진|짐|집|졌|질)"
+)
+
+# 수량어 뒤의 중복 복수 "-들". "여러 파일들", "많은 사용자들이".
+PLURAL_DUP = re.compile(
+    r"(?:여러|많은|수많은|다양한|각종|몇몇|모든)\s(?:[가-힣]+\s)?[가-힣]+들"
+    r"(?=[이가을를은는의과와도에로]|\s|[.,])"
+)
+
+# 앞 명사를 받는 3인칭 대명사.
+PRONOUN = re.compile(r"(?<![가-힣])(?:그것|그녀|그들)(?:은|는|이|가|을|를|의|에게|과|와|도|만)?(?![가-힣])")
+
+# 문장 끝 "~것이다". "끝날 것입니다"처럼 ㄹ 관형형 뒤의 추측과 예정은 뺀다.
+GEOT_END = re.compile(r"([가-힣])\s?것(?:이다|입니다|이에요|이죠)[.!?]")
+
+# 문두 접속사.
+SENT_CONJ = re.compile(
+    r"^(?:그리고|또한|따라서|그러나|하지만|그래서|그런데|게다가|더불어|한편|그러므로|즉)(?=[\s,])"
+)
+
+
+def _has_rieul_batchim(ch: str) -> bool:
+    code = ord(ch) - 0xAC00
+    return 0 <= code < 11172 and code % 28 == 8
+
+
+def geot_endings(body: str):
+    return [m.group(0) for m in GEOT_END.finditer(body)
+            if not _has_rieul_batchim(m.group(1))]
+
+
+def prose_sentences(body: str):
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
+            if s.strip()]
+
+
+def sentence_conjunctions(body: str):
+    sents = prose_sentences(body)
+    return [s for s in sents if SENT_CONJ.search(s)], len(sents)
 
 def closing_horizon(body: str):
     sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
@@ -195,6 +255,14 @@ def check(text: str) -> dict:
     caveat = HOLLOW_CAVEAT.findall(body)
     horizon = closing_horizon(body)
 
+    prep = PREP_CALQUE.findall(body)
+    possess = POSSESS.findall(body)
+    double_passive = DOUBLE_PASSIVE.findall(body)
+    plural_dup = PLURAL_DUP.findall(body)
+    pronoun = PRONOUN.findall(body)
+    geot = geot_endings(body)
+    conj, n_sent = sentence_conjunctions(body)
+
     violations = []
 
     def add(label, items, limit, detail=""):
@@ -235,6 +303,18 @@ def check(text: str) -> dict:
     add("내용 없는 반론 문패", caveat, 0)
     add("결말부 시간지평 (향후, 앞으로)", horizon, 0,
         " / ".join(h[:26] for h in horizon[:2]))
+    # 긴 문서에서는 800자마다 하나씩 더 허용한다. 짧은 답변의 기준은 셋이다.
+    add("전치사 번역투 (~에 대해, ~를 통해, ~로부터)", prep, max(3, len(body) // 800),
+        " / ".join(x.strip() for x in prep[:5]))
+    add("소유 구문 (~를 가지고 있다)", possess, 1)
+    add("이중 피동 (되어지다, 보여지다)", double_passive, 0,
+        " / ".join(double_passive[:4]))
+    add("중복 복수 (여러 X들)", plural_dup, 1,
+        " / ".join(plural_dup[:3]))
+    add("3인칭 대명사 (그것, 그녀, 그들)", pronoun, 1)
+    add("~것이다 결말", geot, 2, " / ".join(geot[:3]))
+    add("문두 접속사", conj, max(1, n_sent // 5),
+        " / ".join(c[:14] for c in conj[:3]))
 
     return {
         "violations": violations,
@@ -256,6 +336,13 @@ def check(text: str) -> dict:
             "generative_metaphor": len(metaphor),
             "hollow_caveat": len(caveat),
             "closing_horizon": len(horizon),
+            "preposition_calque": len(prep),
+            "possessive_have": len(possess),
+            "double_passive": len(double_passive),
+            "redundant_plural": len(plural_dup),
+            "third_person_pronoun": len(pronoun),
+            "geot_ending": len(geot),
+            "sentence_initial_conjunction": len(conj),
             "checked_chars": len(body),
         },
     }
