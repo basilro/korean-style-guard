@@ -60,6 +60,57 @@ OBLIGATION = re.compile(
 )
 
 
+# 어휘 항목. im-not-ai 의 사람 60편 대 AI 99편 대조(2026-08-29)와 사람 532편 실측에서
+# 사람 쪽이 0건이거나 AI 쪽이 몇 배 많고, 모델을 바꿔도 방향이 유지된 것만 넣는다.
+# 사람이 더 많이 쓴 것(~를 통해, ~에 대해, 것이다 결말, 문두 접속사)은 일부러 뺐다.
+
+# 분열문 강조 (D-8). "필요한 것은 X다", "핵심은 X다". 사람 0.09 대 AI 0.92, 약 10배.
+CLEFT = re.compile(
+    r"(?:필요한|중요한|핵심적인|주목할|눈여겨볼)\s?(?:것|점)은"
+    r"|(?:^|(?<=[.!?,]\s)|(?<=[.!?,]))\s*(?:문제는|핵심은|관건은|답은)\s",
+    re.M,
+)
+
+# 결산 표지 (D-1, D-9, D-10). 결산 부사와 "~하는 이유다" 도치 결말.
+# 사람의 "결국"은 서사 귀결에만 쓰이고 논리 결산용은 0건이었다.
+WRAPUP = re.compile(
+    r"결론적으로|요약하면|요약하자면|종합하면|종합하자면|정리하자면|요컨대"
+    r"|(?<![가-힣])결국(?![가-힣])"
+    r"|이유(?:다|입니다|예요|이다)[.!]?(?=\s|$)",
+    re.M,
+)
+
+# 범위 상승 (A-21). "단순한 X를 넘어 Y". 사람 60편 0건, AI 12편.
+BEYOND = re.compile(r"단순(?:한|히)?\s?[가-힣\s]{0,12}?(?:을|를)\s?넘어")
+
+# 생성형 은유 (D-14). 사람 532편에서 0건이었던 여덟 가지.
+# 회계 용어로 굳은 "자본잠식", "비용이 수익을 잠식" 은 은유가 아니라 술어이므로 뺀다.
+METAPHOR = re.compile(
+    r"(?<!자본)(?<!자본 )(?<!비용)(?<!비용 )(?<!수익)(?<!수익 )(?<!비용이 수익 )(?<!수익을 )잠식|청사진|적신호|경고등|신호탄|움켜쥐|움켜잡|뿌리내리|뿌리를 내리|짓누르|짓눌"
+)
+
+# 내용 없는 반론 문패 (D-12). 독립 문장으로 쓴 경우만 센다. 사람 0건, AI 8편.
+HOLLOW_CAVEAT = re.compile(
+    r"(?:^|(?<=[.!?]\s))(?:그러나\s|하지만\s|다만\s)?"
+    r"(?:과제도|한계도|아쉬운 점도|숙제도|우려도)\s?"
+    r"(?:남아\s?있|분명하|존재하|있)(?:다|습니다|어요)[.]",
+    re.M,
+)
+
+# 결말부 시간지평 (D-11). 본문 뒤쪽 30% 에서 "향후", "앞으로"로 여는 문장.
+# 위치를 빼면 사람도 쓰지만, 결말 위치에서는 사람 0건 대 AI 12편이었다.
+HORIZON = re.compile(r"^(?:향후|앞으로|장기적으로|중장기적으로|머지않아)(?:는|에는)?[\s,]")
+
+
+def closing_horizon(body: str):
+    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
+             if s.strip()]
+    if len(sents) < 4:
+        return []
+    start = int(len(sents) * 0.7)
+    return [s for s in sents[start:] if HORIZON.search(s)]
+
+
 def prose_paragraphs(body: str):
     """헤딩과 목록과 표를 뺀 본문 문단을 돌려준다."""
     paras, cur = [], []
@@ -137,6 +188,13 @@ def check(text: str) -> dict:
     colon_heads = [h for h in heads if re.search(r"\S\s*[:：]\s+\S", h)]
     obligation = [p for p in prose_paragraphs(body) if OBLIGATION.search(p)]
 
+    cleft = CLEFT.findall(body)
+    wrapup = WRAPUP.findall(body)
+    beyond = BEYOND.findall(body)
+    metaphor = METAPHOR.findall(body)
+    caveat = HOLLOW_CAVEAT.findall(body)
+    horizon = closing_horizon(body)
+
     violations = []
 
     def add(label, items, limit, detail=""):
@@ -167,6 +225,16 @@ def check(text: str) -> dict:
         " / ".join(h.strip()[:30] for h in colon_heads[:3]))
     add("당위로 끝나는 문단", obligation, 2,
         " / ".join(p[-26:] for p in obligation[:3]))
+    add("분열문 강조 (중요한 것은 X)", cleft, 1,
+        " / ".join(c.strip() for c in cleft[:3]))
+    add("결산 표지 (결국, 요컨대, ~하는 이유다)", wrapup, 1,
+        " / ".join(w for w in wrapup[:4]))
+    add("범위 상승 (단순한 X를 넘어)", beyond, 0,
+        " / ".join(b for b in beyond[:3]))
+    add("생성형 은유", metaphor, 0, " / ".join(metaphor[:4]))
+    add("내용 없는 반론 문패", caveat, 0)
+    add("결말부 시간지평 (향후, 앞으로)", horizon, 0,
+        " / ".join(h[:26] for h in horizon[:2]))
 
     return {
         "violations": violations,
@@ -182,6 +250,12 @@ def check(text: str) -> dict:
             "comma_after_connective": len(comma_after),
             "colon_headings": len(colon_heads),
             "obligation_paragraphs": len(obligation),
+            "cleft_emphasis": len(cleft),
+            "wrapup_markers": len(wrapup),
+            "beyond_escalation": len(beyond),
+            "generative_metaphor": len(metaphor),
+            "hollow_caveat": len(caveat),
+            "closing_horizon": len(horizon),
             "checked_chars": len(body),
         },
     }
