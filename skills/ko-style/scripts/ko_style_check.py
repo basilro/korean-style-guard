@@ -143,6 +143,60 @@ SENT_CONJ = re.compile(
 )
 
 
+# 여기부터는 국어 작법서의 기준이다. 김정선(2016), 이오덕(1989), 국립국어원 다듬은 말과 겹말 풀이,
+# 스티븐 킹 『유혹하는 글쓰기』. 역시 판별 신호가 아니라 자연스러운 한국어의 기준이다.
+
+# 한자어 뒤의 접미사 "-적". 앞이 두 음절 이상일 때만 센다(목적, 지적, 흔적, 실적은 빠진다).
+JUK = re.compile(r"(?<![가-힣])[가-힣]{2,}적(?:인|으로|이다|입니다|이고|일|임)(?![가-힣])")
+
+# 조사 뒤에 "의"를 겹친 일본어투(での, への, との). "과의", "로의"는 결과, 경로 같은 명사와 겹쳐 뺀다.
+PARTICLE_UI = re.compile(r"(?:에서|으로|에게|로부터|로서|와|에)의(?=\s)")
+
+# "의"로 끝나는 명사. 관형격 "의"가 이어지는지 볼 때 뺀다.
+UI_NOUNS = set("회의 정의 주의 논의 동의 문의 합의 의의 결의 건의 강의 모의 협의 신의 민의 "
+               "자의 예의 편의 호의 무의 수의 유의 이의 질의 심의 고의 대의 본의 선의 악의 성의 "
+               "창의 상의 하의 내의 견의".split())
+
+# 하다로 충분한 타동사에 붙인 "-시키다".
+SIKIDA = re.compile(
+    r"(?:소개|교육|연결|입력|완료|종료|실행|설치|해결|적용|반영|구분|분리|설득|대입|배포|"
+    r"등록|삭제|저장|변경|수정|개선|발전|향상)시(?:키|켜|켰|킨|킬|킴)"
+)
+
+# 영어 과거완료를 옮긴 "-었었-".
+PLUPERFECT = re.compile(r"(?:았|었|였|했)었(?=[다습던어고는지])")
+
+# 일본어와 영어에서 온 관용구. 에 다름 아니다, ~을 요하다, 과언이 아니다, one of the most.
+CALQUE_IDIOM = re.compile(
+    r"다름\s?아니|(?:을|를)\s?요하|과언이\s?아니"
+    r"|가장\s[가-힣]+\s(?:[가-힣]+\s)?(?:것\s)?중\s?(?:의\s)?하나"
+)
+
+# 겹말. 한자어가 이미 품은 뜻을 고유어로 한 번 더 쓴다.
+PLEONASM = re.compile(
+    r"미리\s?예(?:약|상|측|비|습|고|매)|과반수\s?이상|과반수를\s?넘|다시\s?재(?:개|발|시작|확인|검토|발송|설치)"
+    r"|가장\s?최(?:고|선|대|소|초|상|하|적)|먼저\s?선(?:행|결|착)|함께\s?동(?:행|참|반)"
+    r"|남은\s?여생|새로\s?신(?:설|규|축)|서로\s?상(?:호|의)|약\s?[0-9][0-9,.]*\S*\s?정도"
+    r"|분명히\s?명시|가까운\s?근(?:처|방)|뒤로\s?후퇴|역전\s?앞"
+)
+
+# 강조 부사.
+INTENSIFIER = re.compile(
+    r"(?<![가-힣])(?:매우|정말|정말로|굉장히|상당히|대단히|무척|너무나|아주|엄청|몹시|극히)(?![가-힣])"
+)
+
+
+def ui_chains(body: str):
+    """관형격 "의"가 세 어절 연달아 이어지는 곳을 찾는다(사용자의 설정의 값)."""
+    found = []
+    for sent in re.split(r"[.!?\n]", body):
+        words = sent.split()
+        for a, b in zip(words, words[1:]):
+            if (len(a) >= 2 and len(b) >= 2 and a.endswith("의") and b.endswith("의")
+                    and a not in UI_NOUNS and b not in UI_NOUNS):
+                found.append(f"{a} {b}")
+    return found
+
 def _has_rieul_batchim(ch: str) -> bool:
     code = ord(ch) - 0xAC00
     return 0 <= code < 11172 and code % 28 == 8
@@ -263,6 +317,15 @@ def check(text: str) -> dict:
     geot = geot_endings(body)
     conj, n_sent = sentence_conjunctions(body)
 
+    juk = JUK.findall(body)
+    particle_ui = PARTICLE_UI.findall(body)
+    chain = ui_chains(body)
+    sikida = SIKIDA.findall(body)
+    pluperfect = PLUPERFECT.findall(body)
+    idiom = CALQUE_IDIOM.findall(body)
+    pleonasm = PLEONASM.findall(body)
+    intens = INTENSIFIER.findall(body)
+
     violations = []
 
     def add(label, items, limit, detail=""):
@@ -315,6 +378,17 @@ def check(text: str) -> dict:
     add("~것이다 결말", geot, 2, " / ".join(geot[:3]))
     add("문두 접속사", conj, max(1, n_sent // 5),
         " / ".join(c[:14] for c in conj[:3]))
+    add("접미사 -적 (효과적인, 구체적으로)", juk, max(3, len(body) // 800),
+        " / ".join(juk[:5]))
+    add("조사 뒤 -의 (에서의, 와의, 으로의)", particle_ui, 1)
+    add("관형격 -의 연쇄 (A의 B의 C)", chain, 0, " / ".join(chain[:3]))
+    add("불필요한 -시키다 (소개시키다)", sikida, 0, " / ".join(sikida[:3]))
+    add("과거완료 -었었-", pluperfect, 1)
+    add("번역투 관용구 (다름 아니다, 요하다, 가장 ~ 중 하나)", idiom, 0,
+        " / ".join(idiom[:3]))
+    add("겹말 (미리 예약, 과반수 이상)", pleonasm, 0, " / ".join(pleonasm[:3]))
+    add("강조 부사 (매우, 정말, 굉장히)", intens, max(2, len(body) // 1000),
+        " / ".join(intens[:5]))
 
     return {
         "violations": violations,
@@ -343,6 +417,14 @@ def check(text: str) -> dict:
             "third_person_pronoun": len(pronoun),
             "geot_ending": len(geot),
             "sentence_initial_conjunction": len(conj),
+            "suffix_jeok": len(juk),
+            "particle_ui": len(particle_ui),
+            "ui_chain": len(chain),
+            "needless_causative": len(sikida),
+            "pluperfect": len(pluperfect),
+            "calque_idiom": len(idiom),
+            "pleonasm": len(pleonasm),
+            "intensifier": len(intens),
             "checked_chars": len(body),
         },
     }
