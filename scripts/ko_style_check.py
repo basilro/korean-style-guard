@@ -353,6 +353,25 @@ def all_sentences(body: str):
     return out
 
 
+# 추상 명사를 판정 동사로 묶은 압축(24항). 위키 30문장 조각 0%, fixed 1.7%, r0 0%, r1 25%.
+VERDICT_VERB = re.compile(
+    r"(?<!여기)(?<!거기)에서\s?갈(?:립니다|려요|린다)[.]?$"
+    r"|(?:을|를)\s?(?:가릅니다|갈라요|가른다|좌우합니다|좌우해요|좌우한다)[.]?$"
+    r"|단서로\s?삼(?:습니다|아요|는다)")
+# 주체 없는 견해 종결(7항). 위키 0.8%, fixed 0%, r0·r1 8.3%.
+VIEW_TAIL = re.compile(r"(?:다|라)고\s?(?:봅니다|봐요|본다)[.]?$")
+VIEW_OWNER = re.compile(
+    r"(?:저는|제\s|제가|저희는|연구자|학자|전문가|의사|학계|의학계|업계|정부|당국|[가-힣]+들은|에서는|쪽은|측은)")
+
+
+def verdict_verbs(body: str):
+    return [s for s in all_sentences(body) if VERDICT_VERB.search(s)]
+
+
+def ownerless_views(body: str):
+    return [s for s in all_sentences(body) if VIEW_TAIL.search(s) and not VIEW_OWNER.search(s)]
+
+
 def cohesion_drought(body: str):
     sents = all_sentences(body)
     if len(sents) < 16 or any(COHESION_HEAD.match(s) for s in sents):
@@ -844,6 +863,8 @@ def check(text: str) -> dict:
     starved = ["쉼표 0"] if comma_starved(body) else []
     drought = cohesion_drought(body)
     evals = eval_tails(body)
+    verdicts = verdict_verbs(body)
+    views = ownerless_views(body)
     # 서명 줄은 본문 끝 두 줄 안에 있고 그 뒤에 헤딩이 없어야 한다.
     # 메일 쓰는 법을 설명하며 본문 중간에 예시 서명을 든 답변은 뺀다.
     tail = [l for l in lines if l.strip()][-2:]
@@ -954,6 +975,9 @@ def check(text: str) -> dict:
     # 이음말 복원은 24항과 38항 문구로 다룬다.
     add("평가어로만 닫는 문장 (효과적입니다, 도움이 됩니다)", evals, 2,
         " / ".join(e[-16:] for e in evals[:3]))
+    add("판정 동사 압축 (~에서 갈립니다, ~를 가릅니다)", verdicts, 0,
+        " / ".join(v[-20:] for v in verdicts[:2]))
+    add("주체 없는 견해 (~다고 봅니다)", views, 0, " / ".join(v[-20:] for v in views[:2]))
     add("메일 본문의 헤딩", mail_heads, 0, " / ".join(h.strip()[:24] for h in mail_heads[:2]))
     add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
     # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
@@ -1032,6 +1056,8 @@ def check(text: str) -> dict:
             "comma_starved": len(starved),
             "cohesion_drought": len(drought),
             "eval_tail": len(evals),
+            "verdict_verb": len(verdicts),
+            "ownerless_view": len(views),
             "mail_headings": len(mail_heads),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
