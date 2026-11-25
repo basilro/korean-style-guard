@@ -39,7 +39,10 @@ EMOJI = re.compile(
 # 해체(반말) 종결도 완결 문장이다. 반말로 물은 사용자에게 반말로 답하면 "많아.", "줄게.", "거야."로 끝난다.
 # 10회차 표본에서 해체 답변 한 편이 18건으로 걸렸다. "-는데", "-고"처럼 연결어미로 끝난 것은
 # 아래 CONNECTIVES 가 먼저 잡는다.
-CLOSERS = "다요까죠오네군" + "어아야지게해돼봐줘와워래니냐자걸데라"
+CLOSERS = "다요까죠오네군"
+# 반말 답변에서만 쓰는 확장 집합. 존대 종결이 하나라도 있으면 쓰지 않는다. 글자 하나로 받으면
+# "신규 사용자.", "더 나은 미래.", "좋은데." 같은 조각까지 통과하기 때문이다(2차 코드 검토).
+CLOSERS_BANMAL = CLOSERS + "어아야지게해돼봐줘와워래니냐자걸데라"
 CONNECTIVES = ("하고", "이고", "으며", "하며", "인데", "는데", "지만", "아서",
                "어서", "하여", "이며", "면서", "거나", "이나")
 
@@ -145,7 +148,7 @@ RECOMMEND = re.compile(
 # 질문을 칭찬하며 여는 첫말(3항의 인사말과 같은 자리). 처음 두 문장에서만 센다.
 PRAISE_OPEN = re.compile(
     r"^(?:네[,.]?\s*)?(?:아주\s|정말\s|매우\s|참\s)?(?:좋은|훌륭한|날카로운|흥미로운|멋진)\s?(?:질문|생각|접근)"
-    r"(?:입니다|이에요|이네요|이군요|이에요|이죠)"
+    r"(?:입니다|이에요|이네요|이군요|이죠)\s*[.!?]?\s*$"
 )
 
 # 감상형 결말 (11항). 마지막 두 문장에서만 센다. "~하는 것은 어떨까요?", "읽어 볼 가치가 있는 책",
@@ -585,6 +588,7 @@ def unfinished_sentences(body: str):
     bad = []
     # 큰따옴표 안의 대사와 인용은 저자의 서술이 아니므로 뺀다(10회차 소설 발췌).
     joined = re.sub(r"\"[^\"\n]*\"|“[^”\n]*”", " ", " ".join(prose))
+    closers = CLOSERS if re.search(r"(?:니다|요)[.!?]", joined) else CLOSERS_BANMAL
     for raw in re.split(r"(?<=[.!?])\s+", joined):
         sent = raw.strip()
         if len(sent) < 12 or not re.search(r"[가-힣]", sent):
@@ -597,7 +601,7 @@ def unfinished_sentences(body: str):
         # 한다체 의문(있는가, 같은가, 무엇인가)은 완결 문장이다(19회차). "가" 하나만 보면 명사 조각을 놓친다.
         if stem.endswith(("는가", "은가", "인가", "던가", "ㄴ가")):
             continue
-        if stem.endswith(CONNECTIVES) or stem[-1] not in CLOSERS:
+        if stem.endswith(CONNECTIVES) or stem[-1] not in closers:
             bad.append(sent)
     return bad
 
@@ -674,7 +678,12 @@ def check(text: str) -> dict:
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
     starved = ["쉼표 0"] if comma_starved(body) else []
-    mail_heads = heads if MAIL_SIGN.search(body) else []
+    # 서명 줄은 본문 끝 두 줄 안에 있고 그 뒤에 헤딩이 없어야 한다.
+    # 메일 쓰는 법을 설명하며 본문 중간에 예시 서명을 든 답변은 뺀다.
+    tail = [l for l in lines if l.strip()][-2:]
+    signed = (any(MAIL_SIGN.match(l) and not re.match(r"^\s*[-*+]", l) for l in tail)
+              and not any(re.match(r"^#{1,6}\s", l) for l in tail))
+    mail_heads = heads if signed else []
     sents = prose_sentences(body)
     # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
     # 권유가 아니므로 뺀다(6회차 표본의 오탐).
@@ -685,7 +694,8 @@ def check(text: str) -> dict:
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
     # 예고는 "반응 첫말, 주제 문장, 예고" 순서로 셋째 문장에 오기도 한다(17회차). 공감 첫말은 두 문장만 본다.
     head3 = [s for s in sents if not re.match(r"안녕하세요", s)][:3]
-    opener = [s for s in head3 if OPENER.search(s) or PRAISE_OPEN.search(s)]
+    opener = ([s for s in head3 if OPENER.search(s)]
+              + [s for s in head if PRAISE_OPEN.search(s) and not OPENER.search(s)])
     sentiment = [s for s in sents[-2:] if CLOSING_SENTIMENT.search(s)]
     approx = APPROX_STACK.findall(body)
     helps = HELPS_WITH.findall(body)
