@@ -802,6 +802,14 @@ COUNT_CASES = [
     ('mixed_list_two_items_ok', '- 서랍을 여세요.\n- 상자를 꺼내요.', 0),
 ]
 
+# V4 보고서 틀은 위반이 아니라 counts 값으로 본다.
+FRAME_CASES = [
+    ('frame_hit', '여권 재발급 절차는 다음 순서로 진행합니다.\n\n1. 서류를 모읍니다.\n2. 구청에 냅니다.\n3. 수령합니다.', 1),
+    ('frame_hit2', '비교 기준을 정리하면 이렇습니다.\n- 가격이 낮은가\n- 무게가 가벼운가\n- 소리가 작은가', 1),
+    ('frame_plain_ok', '여권 재발급은 서류 준비, 접수, 수령 세 단계예요.\n\n1. 서류를 모으세요.\n2. 구청에 내세요.\n3. 찾아가세요.', 0),
+    ('frame_no_list_ok', '절차는 다음 순서로 진행합니다. 먼저 서류를 모읍니다.', 0),
+]
+
 
 def main():
     failed = 0
@@ -818,7 +826,12 @@ def main():
         if got != want:
             failed += 1
             print(f"실패 {name}: mixed_list_endings {got} (기대 {want})")
-    total = len(CASES) + len(COUNT_CASES)
+    for name, text, want in FRAME_CASES:
+        got = check(text)["counts"]["report_frame"]
+        if got != want:
+            failed += 1
+            print(f"실패 {name}: report_frame {got} (기대 {want})")
+    total = len(CASES) + len(COUNT_CASES) + len(FRAME_CASES)
     print(f"{total - failed}/{total} 통과")
     return 1 if failed else 0
 

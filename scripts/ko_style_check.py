@@ -190,6 +190,24 @@ def mixed_lists(body: str):
     return out
 
 
+# 목록 앞의 보고서 틀(5회차 V4). 목록 바로 앞 줄만 본다. 사람 글 오탐을 아직 재지 않아 counts 에만 남긴다.
+REPORT_FRAME = re.compile(
+    r"(?:다음|아래)\s(?:순서로|과\s같이|와\s같이)\s(?:진행합니다|정리했습니다|정리합니다)|정리하면\s이렇습니다|기준을\s정리하면"
+)
+
+
+def report_frames(body: str):
+    out = []
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        if not REPORT_FRAME.search(line):
+            continue
+        nxt = next((x for x in lines[i + 1:] if x.strip()), "")
+        if LIST_ITEM.match(nxt):
+            out.append(line.strip()[:24])
+    return out
+
+
 # 질문을 칭찬하며 여는 첫말(3항의 인사말과 같은 자리). 처음 두 문장에서만 센다.
 PRAISE_OPEN = re.compile(
     r"^(?:네[,.]?\s*)?(?:아주\s|정말\s|매우\s|참\s)?(?:좋은|훌륭한|날카로운|흥미로운|멋진)\s?(?:질문|생각|접근)"
@@ -950,6 +968,7 @@ def check(text: str) -> dict:
     recommend = RECOMMEND.findall(body)
     rec_tail = REC_TAIL.findall(body)
     mixed_list = mixed_lists(body)
+    report_frame = report_frames(body)
     cmd_runs = command_runs(body)
     inanimate_pl = INANIMATE_PLURAL.findall(body)
     succ = SUCCESSFULLY.findall(body)
@@ -1122,6 +1141,7 @@ def check(text: str) -> dict:
             "recommend_tail": len(recommend),
             "rec_tail_stamped": len(rec_tail),
             "mixed_list_endings": len(mixed_list),
+            "report_frame": len(report_frame),
             "command_run": len(cmd_runs),
             "inanimate_plural": len(inanimate_pl),
             "closing_sentiment": len(sentiment),
