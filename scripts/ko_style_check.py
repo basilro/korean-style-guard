@@ -412,7 +412,10 @@ def all_sentences(body: str):
 VERDICT_VERB = re.compile(
     r"(?<!여기)(?<!거기)에서\s?갈(?:립니다|려요|린다)[.]?$"
     r"|(?:을|를)\s?(?:가릅니다|갈라요|가른다|좌우합니다|좌우해요|좌우한다)[.]?$"
-    r"|단서로\s?삼(?:습니다|아요|는다)")
+    r"|단서로\s?삼(?:습니다|아요|는다)"
+    # 6회차 K15: 명사 셋 묶음(`사대, 학문, 질서로 갈립니다`). 위키 0.7%, 6회차 이전 답 8.3%.
+    # 길이를 묶어 두어야 `가,가,가,…` 같은 입력에서 역추적이 폭발하지 않는다.
+    r"|(?<![가-힣])(?:[가-힣]{1,8},\s?){1,3}[가-힣]{1,8}(?:와|과)?\s?[가-힣]{0,8}(?:으)?로\s?(?:갈립니다|갈려요|나뉩니다|나뉘어요)")
 # 주체 없는 견해 종결(7항). 위키 0.8%, fixed 0%, r0·r1 8.3%.
 VIEW_TAIL = re.compile(r"(?:다|라)고\s?(?:봅니다|봐요|본다)[.]?$")
 VIEW_OWNER = re.compile(
@@ -425,6 +428,46 @@ def verdict_verbs(body: str):
 
 def ownerless_views(body: str):
     return [s for s in all_sentences(body) if VIEW_TAIL.search(s) and not VIEW_OWNER.search(s)]
+
+
+# 6회차 K11: 메타·자기 해명. 답을 쓴 방식이나 확신의 범위를 독자에게 해명한다. 위키 0%, fixed 0%.
+META_NOTE = re.compile(
+    r"(?:확인하지\s?못해서|확인하지\s?못했|적지\s?않았|말씀하지\s?않으셔서|제\s?판단이고|이것은\s?제\s?판단|"
+    r"확실한\s?(?:건|것은)\s?이\s?정도|말씀드릴\s?수\s?있는\s?(?:건|것은)|판단을\s?미루고\s?있)")
+
+# 6회차 K12: 본문에 없는 구절 가리키기. "X" 앞에/뒤에/대신 의 X가 답변 다른 곳에 없다. 위키 0%, fixed 0.9%.
+QUOTE_REF = re.compile(r"[\"“]([^\"”\n]{2,30})[\"”]\s?(?:앞에|뒤에|대신|자리에|부분|라는\s?말)")
+
+
+def dangling_quote_refs(body: str):
+    out = []
+    for m in QUOTE_REF.finditer(body):
+        if m.group(1) not in body[:m.start()] + body[m.end():]:
+            out.append(m.group(1))
+    return out
+
+
+# 6회차 K13: 시점어로 여는 한 문장짜리 마지막 명령. 위키·fixed 0%.
+TAIL_NOW_HEAD = re.compile(r"^(?:오늘|오늘\s?저녁|이번\s?주|이번\s?주말|지금\s?바로|당장|내일)")
+TAIL_CMD = re.compile(r"(?:세요|보세요|십시오)[.!]?$")
+
+
+def tail_now(body: str):
+    paras = prose_paragraphs(body)
+    if not paras:
+        return []
+    sents = [s for s in re.split(r"(?<=[.!?])\s+", paras[-1].strip()) if s]
+    if len(sents) == 1 and TAIL_NOW_HEAD.search(sents[0]) and TAIL_CMD.search(sents[0]):
+        return [sents[0][:20]]
+    return []
+
+
+# 6회차 K14: 한 문장에 `~는 점` 나열 둘 이상 뒤에 하나 더(셋 이상). 위키·fixed 0%.
+POINT_ITEM = re.compile(r"(?:다는|는|은|라는)\s?점(?:,|\s?그리고|과|와)")
+
+
+def point_lists(body: str):
+    return [s[:20] for s in all_sentences(body) if len(POINT_ITEM.findall(s)) >= 2]
 
 
 def cohesion_drought(body: str):
@@ -936,6 +979,10 @@ def check(text: str) -> dict:
     evals = eval_tails(body)
     verdicts = verdict_verbs(body)
     views = ownerless_views(body)
+    meta_note = META_NOTE.findall(body)
+    quote_refs = dangling_quote_refs(body)
+    tail_nows = tail_now(body)
+    point_list = point_lists(body)
     # 서명 줄은 본문 끝 두 줄 안에 있고 그 뒤에 헤딩이 없어야 한다.
     # 메일 쓰는 법을 설명하며 본문 중간에 예시 서명을 든 답변은 뺀다.
     tail = [l for l in lines if l.strip()][-2:]
@@ -1053,6 +1100,10 @@ def check(text: str) -> dict:
     add("판정 동사 압축 (~에서 갈립니다, ~를 가릅니다)", verdicts, 0,
         " / ".join(v[-20:] for v in verdicts[:2]))
     add("주체 없는 견해 (~다고 봅니다)", views, 0, " / ".join(v[-20:] for v in views[:2]))
+    add("메타·자기 해명 (확실한 건 이 정도, 적지 않았습니다)", meta_note, 0, " / ".join(meta_note[:2]))
+    add("본문에 없는 구절 가리키기", quote_refs, 0, " / ".join(quote_refs[:2]))
+    add("끝에 붙은 시점 명령 (오늘 저녁에 ~하세요)", tail_nows, 0, " / ".join(tail_nows[:1]))
+    add("한 문장 나열 과밀 (~는 점, ~는 점, ~는 점)", point_list, 0, " / ".join(point_list[:2]))
     add("메일 본문의 헤딩", mail_heads, 0, " / ".join(h.strip()[:24] for h in mail_heads[:2]))
     add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
     # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
@@ -1136,6 +1187,10 @@ def check(text: str) -> dict:
             "eval_tail": len(evals),
             "verdict_verb": len(verdicts),
             "ownerless_view": len(views),
+            "meta_note": len(meta_note),
+            "dangling_quote_ref": len(quote_refs),
+            "tail_now_command": len(tail_nows),
+            "point_list": len(point_list),
             "mail_headings": len(mail_heads),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
