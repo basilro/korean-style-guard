@@ -710,8 +710,10 @@ def check(text: str) -> dict:
     # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
     # 권유가 아니므로 뺀다(6회차 표본의 오탐).
     followup = [m.group(0) for m in FOLLOWUP.finditer(body) if not _elsewhere(m.group(0))]
+    # 같은 문장을 두 정규식이 함께 잡으면 한 건으로 센다.
     followup += [s for s in sents[-2:]
-                 if (m := CLOSING_OFFER.search(s)) and not _elsewhere(m.group(0))]
+                 if (m := CLOSING_OFFER.search(s)) and not _elsewhere(m.group(0))
+                 and not any(f in s for f in followup)]
     # 인사말은 3항이 따로 막으므로 첫 두 문장을 고를 때 건너뛴다.
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
     # 예고는 "반응 첫말, 주제 문장, 예고" 순서로 셋째 문장에 오기도 한다(17회차). 공감 첫말은 두 문장만 본다.
