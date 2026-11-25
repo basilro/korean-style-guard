@@ -170,6 +170,12 @@ CLOSING_OFFER = re.compile(
     r"|(?:공유해|보내|알려)\s?주시면[^.!?]{0,30}(?:도와|안내해|확인해|살펴|조정해|맞춰|다듬어|정리해)\s?드(?:리|릴)"
     r"|(?:어려우시면|막막하시면|고민되시면|어려우면|막막하면)[^.!?]{0,40}(?:말씀해|알려|질문해|물어봐)\s?(?:주세요|주십시오|줘)"
     r"|(?:필요하시면|필요하면|원하시면|원하면)[^.!?]{0,40}(?:만들어|정리해|작성해|바꿔|준비해)\s?드릴\s?수\s?있"
+    # 17회차: "있으시다면, 궁금하시다면" 조건절과 "안내해, 추천해 드릴 수 있어요"
+    r"|(?:있으시|궁금하시|원하시|필요하시)(?:다면|면)[^.!?\n]{0,40}(?:말씀해|질문해|알려|물어봐)\s?주(?:세요|십시오)"
+    r"|(?:있으시|궁금하시|원하시|필요하시)(?:다면|면)[^.!?\n]{0,40}"
+    r"(?:알려|안내해|추천해|도와|정리해|만들어|설명해|다듬어)\s?드(?:릴게요|릴\s?수\s?있|리겠습니다|릴께요)"
+    r"|(?:알려|말씀해)\s?주시면[^.!?\n]{0,30}(?:추천해|안내해|알려|설명해)\s?드(?:리|릴)"
+    r"|^더\s?(?:구체적으로|자세히)\s?(?:도와|안내해|알려|설명해)\s?드(?:리겠습니다|릴게요)"
 )
 
 # 4회차 검토의 상투 표현. 사람 글에서 모두 0건이었다. 기준 말뭉치가 논문이라 증거가 약하므로
@@ -645,7 +651,9 @@ def check(text: str) -> dict:
                  if (m := CLOSING_OFFER.search(s)) and not ELSEWHERE.search(m.group(0))]
     # 인사말은 3항이 따로 막으므로 첫 두 문장을 고를 때 건너뛴다.
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
-    opener = [s for s in head if OPENER.search(s) or PRAISE_OPEN.search(s)]
+    # 예고는 "반응 첫말, 주제 문장, 예고" 순서로 셋째 문장에 오기도 한다(17회차). 공감 첫말은 두 문장만 본다.
+    head3 = [s for s in sents if not re.match(r"안녕하세요", s)][:3]
+    opener = [s for s in head3 if OPENER.search(s) or PRAISE_OPEN.search(s)]
     sentiment = [s for s in sents[-2:] if CLOSING_SENTIMENT.search(s)]
     approx = APPROX_STACK.findall(body)
     helps = HELPS_WITH.findall(body)
