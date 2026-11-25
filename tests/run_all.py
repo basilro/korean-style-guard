@@ -52,7 +52,8 @@ def check_rules_length():
     """보칙이 SessionStart 주입 상한 안에 드는지 본다.
 
     Claude Code 는 훅의 additionalContext 를 10,000자로 자른다. 넘으면 파일로 빼고 앞 2,000자만
-    보여 준다. 그러면 보칙 대부분이 세션에 들어가지 않는다. 여유를 두고 9,500자를 문턱으로 둔다.
+    보여 준다. 그러면 보칙 대부분이 세션에 들어가지 않는다. 주입 훅은 파일을 그대로 내보내므로
+    200자 여유를 두고 9,800자를 문턱으로 둔다.
     """
     bad = []
     # 주입 훅마다 따로 잰다. hooks.json 이 부르는 파일이 모두 있어야 한다.
@@ -66,8 +67,8 @@ def check_rules_length():
             continue
         with open(path, encoding="utf-8") as fh:
             n = len(fh.read())
-        if n > 9500:
-            bad.append(f"{name} {n}자, 주입 상한 여유선 9,500자 초과")
+        if n > 9800:
+            bad.append(f"{name} {n}자, 주입 상한 여유선 9,800자 초과")
     return bad
 
 
