@@ -62,6 +62,20 @@ COMMA_EXEMPT = ("그리고", "그래서", "그런데", "하지만", "그러면�
 # 어절 첫머리에서만 시작한다. 뒤보기가 없으면 공백 없는 긴 한글에서 이차 시간이 든다.
 COMMA_AFTER = re.compile(r"(?<![가-힣])([가-힣]+),")
 
+# 쉼표 하한. 보칙을 지키려다 쉼표를 나열까지 모두 없앤 글(12회차, 13회차)을 잡는다.
+# 500자 넘는 산문에 연결어미 어절이 다섯 넘게 있는데 쉼표가 하나도 없으면 센다.
+# 사람 논문을 500자로 자른 조각 634개 중 6개(0.9%), 1,500자 조각 216개 중 0개가 걸렸다.
+COMMA_WORD = re.compile(r"(?<![가-힣])([가-힣]+)(?=[ ,])")
+
+
+def comma_starved(body: str) -> bool:
+    prose = " ".join(prose_paragraphs(body))
+    if len(prose) < 500 or "," in prose:
+        return False
+    conn = sum(1 for w in COMMA_WORD.findall(prose)
+               if w.endswith(COMMA_ENDINGS) and w not in COMMA_EXEMPT)
+    return conn >= 5
+
 # 문단 끝의 당위. 앞에서 한 번 쓰면 충분한데 문단마다 같은 자리에 되풀이된다.
 OBLIGATION = re.compile(
     r"(?:야\s?(?:한다|합니다|해요|하죠)|필요가\s?있(?:다|습니다|어요))"
@@ -613,6 +627,7 @@ def check(text: str) -> dict:
     level_mix = speech_level_mix(body)
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
+    starved = ["쉼표 0"] if comma_starved(body) else []
     sents = prose_sentences(body)
     # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
     # 권유가 아니므로 뺀다(6회차 표본의 오탐).
@@ -701,6 +716,7 @@ def check(text: str) -> dict:
     add("겹말 (미리 예약, 과반수 이상)", pleonasm, 0, " / ".join(pleonasm[:3]))
     add("강조 부사 (매우, 정말, 굉장히)", intens, max(2, len(body) // 1000),
         " / ".join(intens[:5]))
+    add("쉼표 없는 긴 산문 (끊어 읽을 자리에 하나 두기)", starved, 0)
     add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
     # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
     add("헤지 겹쓰기 (~할 수 있을 것이다)", hedge, 1, " / ".join(h.strip() for h in hedge[:3]))
@@ -767,6 +783,7 @@ def check(text: str) -> dict:
             "speech_level_mix": len(level_mix),
             "particle_swap": len(particle_swap),
             "spacing": len(spacing),
+            "comma_starved": len(starved),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
             "inanimate_plural": len(inanimate_pl),
