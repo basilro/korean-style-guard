@@ -387,21 +387,46 @@ FIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*([^*\n]{1,20}?)(?:\*\*\s*[:：]|[:：]
 SENTENCE_VALUE = re.compile(r"[.!?]\s*$|(?:다|요|죠)\s*$|(?:다|요)[.!?]")
 
 
+def _is_field_value(value: str) -> bool:
+    # 용어 사전의 정의(- **빌드**: 소스 코드를 실행 가능한 결과물로 바꾸는 과정)는 40자를 넘기도 한다.
+    # 문장으로 끝나지 않으면 80자까지 서식 칸으로 본다(10회차).
+    return len(value) <= 80 and not SENTENCE_VALUE.search(value)
+
+
 def field_blocks(lines):
-    """값이 문장이 아닌 짧은 서식 칸이 두 줄 이상 이어진 덩어리의 줄 번호 묶음을 돌려준다."""
-    blocks, cur = [], []
+    """값이 문장이 아닌 짧은 서식 칸이 두 줄 이상 이어진 덩어리의 줄 번호 묶음을 돌려준다.
+
+    라벨 줄이 이어진 덩어리 안에 값이 문장인 줄이 하나만 끼어 있으면 덩어리 전체를 서식 칸으로 본다.
+    일정표의 '저녁' 칸 하나가 문장이라 덩어리가 끊기고 뒤의 한 줄만 따로 걸리던 오탐이다(4·17회차).
+    """
+    runs, cur = [], []
     for i, line in enumerate(lines):
         m = FIELD.match(line)
-        # 용어 사전의 정의(- **빌드**: 소스 코드를 실행 가능한 결과물로 바꾸는 과정)는 40자를 넘기도 한다.
-        # 문장으로 끝나지 않으면 80자까지 서식 칸으로 본다(10회차).
-        if m and len(m.group(2)) <= 80 and not SENTENCE_VALUE.search(m.group(2)):
-            cur.append(i)
+        if m:
+            cur.append((i, _is_field_value(m.group(2))))
             continue
-        if len(cur) >= 2:
-            blocks.append(cur)
+        if cur:
+            runs.append(cur)
         cur = []
-    if len(cur) >= 2:
-        blocks.append(cur)
+    if cur:
+        runs.append(cur)
+
+    blocks = []
+    for run in runs:
+        fields = sum(1 for _, ok in run if ok)
+        if fields >= 2 and len(run) - fields <= 1:
+            blocks.append([i for i, _ in run])
+            continue
+        sub = []
+        for i, ok in run:
+            if ok:
+                sub.append(i)
+                continue
+            if len(sub) >= 2:
+                blocks.append(sub)
+            sub = []
+        if len(sub) >= 2:
+            blocks.append(sub)
     return blocks
 
 
