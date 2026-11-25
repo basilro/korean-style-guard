@@ -211,7 +211,16 @@ HOLLOW_DISCLAIMER = re.compile(
 MAIL_SIGN = re.compile(r"^[^\n#*]{1,20}\s(?:드림|올림)\s*$", re.M)
 
 # 받는 쪽(부서, 담당자, 연락처)을 밝힌 안내. 후속 제안에서 뺀다.
-ELSEWHERE = re.compile(r"[가-힣0-9)]\s?(?:에게|께|에|로|으로|한테)\s?(?:말씀|알려|질문|물어|문의|연락)")
+# 조사와 동사 사이에 보조사 "도"나 부사 하나가 끼어도 받는 쪽이다("식당에 미리 알려 주세요", 23회차).
+ELSEWHERE = re.compile(
+    r"[가-힣0-9)]\s?(?:에게|께|에|로|으로|한테)(?:도)?\s?(?:[가-힣]+\s)?(?:말씀|알려|질문|물어|문의|연락)"
+)
+# 받는 쪽이 답변자 자신(저에게, 저한테)이면 후속 제안 그대로다.
+SELF_ADDRESSEE = re.compile(r"(?<![가-힣])저(?:에게|한테)")
+
+
+def _elsewhere(span: str) -> bool:
+    return bool(ELSEWHERE.search(span)) and not SELF_ADDRESSEE.search(span)
 
 # successfully 직역. 완료 문구는 "저장되었습니다"로 충분하다. 사람 글 0건.
 SUCCESSFULLY = re.compile(r"성공적으로\s(?:[가-힣]+\s)?[가-힣]*(?:되었|됐|완료되|완료했)")
@@ -700,9 +709,9 @@ def check(text: str) -> dict:
     sents = prose_sentences(body)
     # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
     # 권유가 아니므로 뺀다(6회차 표본의 오탐).
-    followup = [m.group(0) for m in FOLLOWUP.finditer(body) if not ELSEWHERE.search(m.group(0))]
+    followup = [m.group(0) for m in FOLLOWUP.finditer(body) if not _elsewhere(m.group(0))]
     followup += [s for s in sents[-2:]
-                 if (m := CLOSING_OFFER.search(s)) and not ELSEWHERE.search(m.group(0))]
+                 if (m := CLOSING_OFFER.search(s)) and not _elsewhere(m.group(0))]
     # 인사말은 3항이 따로 막으므로 첫 두 문장을 고를 때 건너뛴다.
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
     # 예고는 "반응 첫말, 주제 문장, 예고" 순서로 셋째 문장에 오기도 한다(17회차). 공감 첫말은 두 문장만 본다.
