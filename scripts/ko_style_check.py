@@ -42,6 +42,7 @@ CONNECTIVES = ("하고", "이고", "으며", "하며", "인데", "는데", "지�
 CONTRAST = re.compile(
     r"(?<!뿐만 )(?<!뿐 )(?<!뿐만)(?<!뿐)아니라(?![가-힣])"
     r"|것(?:은|이)\s?(?:아니다|아닙니다|아니에요|아니죠)"
+    r"|(?<![그이저])것(?:은|이)\s?아니라고"
 )
 
 # 연결어미 바로 뒤의 쉼표. KatFish(ACL 2025)에서 사람과 LLM 을 가장 잘 가른 표기 신호다.
@@ -77,7 +78,8 @@ CLEFT = re.compile(
 WRAPUP = re.compile(
     r"결론적으로|요약하면|요약하자면|종합하면|종합하자면|정리하자면|요컨대"
     r"|(?<![가-힣])결국(?![가-힣])"
-    r"|이유(?:다|입니다|예요|이다)[.!]?(?=\s|$)",
+    r"|이유(?:다|입니다|예요|이다)[.!]?(?=\s|$)"
+    r"|(?:^|(?<=[.!?]\s))(?:정리하면|정리해\s?보면)(?=[\s,])",
     re.M,
 )
 
@@ -100,6 +102,19 @@ HOLLOW_CAVEAT = re.compile(
 
 # 결말부 시간지평 (D-11). 본문 뒤쪽 30% 에서 "향후", "앞으로"로 여는 문장.
 # 위치를 빼면 사람도 쓰지만, 결말 위치에서는 사람 0건 대 AI 12편이었다.
+# 묻지 않은 후속 제안 (11항). "추가로 궁금한 점이 있으시면 말씀해 주세요"로 닫는 꼴.
+# 고객센터 안내처럼 연락처를 알려 주는 문장은 "말씀, 알려, 물어, 질문"으로 끝나지 않아 빠진다.
+FOLLOWUP = re.compile(
+    r"(?:궁금한|필요한|추가)[가-힣\s]{0,12}?(?:점|사항|부분)[이가]?\s?(?:있으시|있으면|생기시|생기면)[가-힣]*\s"
+    r"(?:언제든(?:지)?\s|편하게\s)*(?:말씀|알려|물어|질문)"
+)
+
+# 권고 꼬리 되풀이. "~하는 것이 좋습니다/바람직합니다/권장됩니다"가 문단마다 같은 자리에 온다.
+# 7항(당위 되풀이)과 같은 취지다. 1회차 표본 넷에서 다섯 번 나왔고 사람 글에서는 10만 자당 0.8건이었다.
+RECOMMEND = re.compile(
+    r"[가-힣]\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다)"
+)
+
 HORIZON = re.compile(r"^(?:향후|앞으로|장기적으로|중장기적으로|머지않아)(?:는|에는)?[\s,]")
 
 
@@ -382,8 +397,12 @@ def check(text: str) -> dict:
 
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
     bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())]
-    bold_lead = [l for l in lines if re.match(r"^\s*\*\*", l)]
-    bold_label = [l for l in lines if re.match(r"^\s*\*\*[^*\n]+\*\*\s*:", l)]
+    # 볼드만 있는 독립 줄은 헤딩 구실을 하므로 문단을 여는 볼드로 세지 않는다. 총량 상한은 그대로 묶인다.
+    bold_lead = [l for l in lines if re.match(r"^\s*\*\*", l)
+                 and not re.match(r"^\s*\*\*[^*\n]+\*\*\s*$", l)]
+    # 목록 항목 머리의 "- **라벨**:" 도 센다.
+    bold_label = [l for l in lines
+                  if re.match(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*[^*\n]+\*\*\s*[:：]", l)]
 
     emoji = EMOJI.findall(body)
     bang = re.findall(r"(?<![!\s])!(?!\=)", body)
@@ -430,6 +449,8 @@ def check(text: str) -> dict:
     level_mix = speech_level_mix(body)
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
+    followup = FOLLOWUP.findall(body)
+    recommend = RECOMMEND.findall(body)
 
     violations = []
 
@@ -502,6 +523,8 @@ def check(text: str) -> dict:
     add("말투 혼용 (합니다체와 한다체)", level_mix, 0,
         " / ".join(s[-20:] for s in level_mix[:3]))
     add("조사 대치 (X를 영향을 주다)", particle_swap, 0, " / ".join(particle_swap[:3]))
+    add("묻지 않은 후속 제안 (궁금한 점이 있으시면)", followup, 0)
+    add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
     add("띄어쓰기 (할수있다, 하고있다)", spacing, 0, " / ".join(s.strip() for s in spacing[:4]))
 
     return {
@@ -546,6 +569,8 @@ def check(text: str) -> dict:
             "speech_level_mix": len(level_mix),
             "particle_swap": len(particle_swap),
             "spacing": len(spacing),
+            "followup_offer": len(followup),
+            "recommend_tail": len(recommend),
             "checked_chars": len(body),
         },
     }
