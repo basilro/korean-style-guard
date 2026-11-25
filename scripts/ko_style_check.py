@@ -144,7 +144,7 @@ RECOMMEND = re.compile(
     r"[가-힣]는\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다"
     r"|중요합니다|중요해요)"
     # 15회차: "~하는 것을 권장합니다", "~해 보시기를 권장합니다", "권장드립니다"
-    # "~하시기를 권합니다"는 판단의 주인을 밝힌 권고라 세지 않는다(7항, 비교 시험 심사).
+    # "~하시기를 권합니다"는 한 번은 세지 않는다. 맺는 틀로 굳히지 않는 것은 쓰는 법으로 다룬다(7항).
     r"|[가-힣]는\s?것을\s?(?:권장|권|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
     r"|[가-힣]기를\s?(?:권장|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
     r"|권장드(?:립니다|려요)"
@@ -325,10 +325,44 @@ INANIMATE_PLURAL = re.compile(
 # 문장 끝 "~것이다". "끝날 것입니다"처럼 ㄹ 관형형 뒤의 추측과 예정은 뺀다.
 GEOT_END = re.compile(r"([가-힣])\s?것(?:이다|입니다|이에요|이죠)[.!?]")
 
-# 문두 접속사.
+# 문두 접속사. 인과와 역접을 드러내는 `그래서`, `하지만`은 문장을 잇는 쪽이라 상한에 넣지 않는다(24항).
 SENT_CONJ = re.compile(
-    r"^(?:그리고|또한|따라서|그러나|하지만|그래서|그런데|게다가|더불어|한편|그러므로|즉)(?=[\s,])"
+    r"^(?:그리고|또한|따라서|그러나|그런데|게다가|더불어|한편|그러므로|즉)(?=[\s,])"
 )
+
+# 문장 사이를 잇는 표지가 하나도 없는 긴 글(24항, 38항). 열여섯 문장 이상에서만 본다.
+COHESION_HEAD = re.compile(
+    r"^(?:그래서|그러면|하지만|그런데|그리고|또한|따라서|그러나|다만|반대로|대신|게다가|한편|이때|그때|"
+    r"이렇게|그렇게|이처럼|이런|그런|이러한|그러한|이|그)(?=[\s,])")
+
+# 평가어로만 닫는 문장(24항). 셋째부터 센다.
+EVAL_TAIL = re.compile(
+    r"(?:효과적|유용|중요|바람직)(?:입니다|합니다|해요|이에요)[.]?$"
+    r"|도움이\s?(?:됩니다|돼요)[.]?$")
+
+
+def all_sentences(body: str):
+    """헤딩, 표, 인용을 뺀 줄에서 목록 기호를 걷고 문장으로 나눈다."""
+    out = []
+    for line in body.split("\n"):
+        t = line.strip()
+        if not t or t.startswith(("#", "|", ">")):
+            continue
+        t = re.sub(r"^(?:[-*+]\s+(?:\[[ x]\]\s*)?|\d+[.)]\s+)", "", t).replace("**", "")
+        out += [s.strip() for s in re.split(r"(?<=[.!?])\s+", t) if s.strip()]
+    return out
+
+
+def cohesion_drought(body: str):
+    sents = all_sentences(body)
+    if len(sents) < 16 or any(COHESION_HEAD.match(s) for s in sents):
+        return []
+    return ["잇는 말 0"]
+
+
+def eval_tails(body: str):
+    return [s for s in all_sentences(body)
+            if EVAL_TAIL.search(s) and not RECOMMEND.search(s) and not HELPS_WITH.search(s)]
 
 
 # 여기부터는 국어 작법서의 기준이다. 김정선(2016), 이오덕(1989), 국립국어원 다듬은 말과 겹말 풀이,
@@ -808,6 +842,8 @@ def check(text: str) -> dict:
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
     starved = ["쉼표 0"] if comma_starved(body) else []
+    drought = cohesion_drought(body)
+    evals = eval_tails(body)
     # 서명 줄은 본문 끝 두 줄 안에 있고 그 뒤에 헤딩이 없어야 한다.
     # 메일 쓰는 법을 설명하며 본문 중간에 예시 서명을 든 답변은 뺀다.
     tail = [l for l in lines if l.strip()][-2:]
@@ -913,6 +949,11 @@ def check(text: str) -> dict:
     add("강조 부사 (매우, 정말, 굉장히)", intens, max(2, len(body) // 1000),
         " / ".join(intens[:5]))
     add("쉼표 없는 긴 산문 (끊어 읽을 자리에 하나 두기)", starved, 0)
+    # 문두 이음말이 하나도 없는 글(16문장 이상)은 counts 에만 남기고 위반으로 세지 않는다. 웹소설 서술
+    # 30문장 조각 1,087개 가운데 9.8%가 걸렸고, 보칙을 따른 답변 12편은 0편이었다(길이가 짧다).
+    # 이음말 복원은 24항과 38항 문구로 다룬다.
+    add("평가어로만 닫는 문장 (효과적입니다, 도움이 됩니다)", evals, 2,
+        " / ".join(e[-16:] for e in evals[:3]))
     add("메일 본문의 헤딩", mail_heads, 0, " / ".join(h.strip()[:24] for h in mail_heads[:2]))
     add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
     # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
@@ -989,6 +1030,8 @@ def check(text: str) -> dict:
             "particle_swap": len(particle_swap),
             "spacing": len(spacing),
             "comma_starved": len(starved),
+            "cohesion_drought": len(drought),
+            "eval_tail": len(evals),
             "mail_headings": len(mail_heads),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
