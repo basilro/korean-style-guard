@@ -18,7 +18,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ko_style_check import check, format_report  # noqa: E402
+# 문체 계수기는 정규식 60여 개를 컴파일하느라 불러오는 데 40ms 안팎이 든다.
+# 한국어 답변일 때만 run() 안에서 불러온다. 영어 답변과 빈 답변은 그 비용을 내지 않는다.
 from ko_lang_check import REASON as LANG_REASON  # noqa: E402
 from ko_lang_check import judge, prompt_from_payload  # noqa: E402
 
@@ -33,6 +34,7 @@ INSTRUCTION = (
 
 
 def build_reason(result: dict) -> str:
+    from ko_style_check import format_report
     return "\n".join([
         "직전 답변이 한국어 보칙을 어겼습니다.",
         format_report(result),
@@ -79,6 +81,7 @@ def run(payload: dict) -> int:
     if not HANGUL.search(message):
         return 0
 
+    from ko_style_check import check
     result = check(message)
     if result["passed"]:
         return 0

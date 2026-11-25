@@ -15,6 +15,7 @@
 import json
 import re
 import sys
+from functools import lru_cache
 
 # 저자가 쓰지 않은 부분을 먼저 지운다.
 MASKS = [
@@ -594,9 +595,11 @@ def geot_endings(body: str):
             if not _has_rieul_batchim(m.group(1))]
 
 
+# 한 번 검사에서 같은 본문을 여러 항목이 나눠 쓴다. 캐시해 두고 바꿀 수 없는 튜플로 돌려준다.
+@lru_cache(maxsize=8)
 def prose_sentences(body: str):
-    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
-            if s.strip()]
+    return tuple(s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
+                 if s.strip())
 
 
 def sentence_conjunctions(body: str):
@@ -604,14 +607,14 @@ def sentence_conjunctions(body: str):
     return [s for s in sents if SENT_CONJ.search(s)], len(sents)
 
 def closing_horizon(body: str):
-    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", " ".join(prose_paragraphs(body)))
-             if s.strip()]
+    sents = prose_sentences(body)
     if len(sents) < 4:
         return []
     start = int(len(sents) * 0.7)
     return [s for s in sents[start:] if HORIZON.search(s)]
 
 
+@lru_cache(maxsize=8)
 def prose_paragraphs(body: str):
     """헤딩과 목록과 표를 뺀 본문 문단을 돌려준다."""
     paras, cur = [], []
@@ -627,7 +630,7 @@ def prose_paragraphs(body: str):
         cur.append(t)
     if cur:
         paras.append(" ".join(cur))
-    return paras
+    return tuple(paras)
 
 
 def strip_noncounting(text: str) -> str:
