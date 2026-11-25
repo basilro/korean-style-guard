@@ -21,8 +21,10 @@ MASKS = [
     r"```.*?```",
     r"~~~.*?~~~",
     r"`[^`\n]+`",
-    r"(?m)^ {4,}\S.*$",
-    r"(?m)^>.*$",
+    # 줄 단위 마스크는 줄을 넘지 않게 [^\n] 으로 쓴다. 아래에서 re.S 로 돌리므로
+    # ".*" 로 쓰면 인용 한 줄 뒤의 본문이 끝까지 지워진다(2회차 검토에서 찾았다).
+    r"(?m)^ {4,}\S[^\n]*$",
+    r"(?m)^[ \t]*>[^\n]*$",
 ]
 
 EMOJI = re.compile(
@@ -113,6 +115,33 @@ FOLLOWUP = re.compile(
 # 7항(당위 되풀이)과 같은 취지다. 1회차 표본 넷에서 다섯 번 나왔고 사람 글에서는 10만 자당 0.8건이었다.
 RECOMMEND = re.compile(
     r"[가-힣]\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다)"
+)
+
+# 끝맺음 제안의 나머지 꼴. 본문 마지막 두 문장에서만 센다. 같은 말이 본문 중간에 오면
+# 실제로 정보를 청하는 문장일 수 있다. 안내문의 "문의해, 연락해, 요청해"는 정상이라 넣지 않는다.
+CLOSING_OFFER = re.compile(
+    r"(?:필요하시면|필요하면|원하시면|원하면|더\s?알고\s?싶)[^.!?]{0,40}"
+    r"(?:말씀해|알려|질문해|물어봐)\s?(?:주세요|주십시오|줘|주시면|주시기)"
+    r"|(?:공유해|보내|알려)\s?주시면[^.!?]{0,20}(?:도와|안내해|확인해|살펴)\s?드리"
+)
+
+# 첫머리 예고 (10항). "~에 대해 쉽게 설명해 드릴게요"처럼 할 일을 예고하며 여는 문장.
+# 본문 처음 두 문장에서만 센다. 시점이나 조건이 붙은 약속("내일까지 정리해 드리겠습니다")은 뺀다.
+OPENER = re.compile(
+    r"^(?![^.!?]*(?:까지|내일|오늘|나중에|대로|되면|끝나면|회의에서|따로))"
+    r"[^.!?]{0,60}?(?:설명|정리|요약|비교|소개)(?:해|하여)\s?드(?:릴게요|리겠습니다|릴께요)[.!]"
+)
+
+# 콜론이 볼드 안에 든 라벨(**일시:**)과 목록 머리 라벨(- **장점**:). 회의록과 공문의
+# "일시: 값" 머리글은 표준이므로 볼드만 걷으면 된다. 2회차 검토의 판단이다.
+BOLD_LABEL = re.compile(
+    r"^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*[^*\n]{1,30}?(?:\*\*\s*[:：]|[:：]\s*\*\*)"
+)
+
+# 콜론 앞이 순서 표시인 헤딩(1단계:, 제2장:, Step 3:)은 9항의 콜론 부제가 아니다.
+STEP_HEAD = re.compile(
+    r"^#{1,6}\s*(?:제\s?)?(?:\d+|[일이삼사오육칠팔구십]+)\s?(?:단계|부|장|절|편|회차|일차|주차|차시)\s*[:：]"
+    r"|^#{1,6}\s*(?:Step|STEP|Part|PART|Q|부록)\s?[0-9A-Z]+\s*[:：]"
 )
 
 HORIZON = re.compile(r"^(?:향후|앞으로|장기적으로|중장기적으로|머지않아)(?:는|에는)?[\s,]")
@@ -398,11 +427,11 @@ def check(text: str) -> dict:
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
     bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())]
     # 볼드만 있는 독립 줄은 헤딩 구실을 하므로 문단을 여는 볼드로 세지 않는다. 총량 상한은 그대로 묶인다.
+    # 라벨 볼드는 따로 세고 줄머리 볼드에서는 뺀다. 한 줄이 두 항목에 겹쳐 걸리지 않게 한다.
+    bold_label = [l for l in lines if BOLD_LABEL.match(l)]
     bold_lead = [l for l in lines if re.match(r"^\s*\*\*", l)
-                 and not re.match(r"^\s*\*\*[^*\n]+\*\*\s*$", l)]
-    # 목록 항목 머리의 "- **라벨**:" 도 센다.
-    bold_label = [l for l in lines
-                  if re.match(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*[^*\n]+\*\*\s*[:：]", l)]
+                 and not re.match(r"^\s*\*\*[^*\n]+\*\*\s*$", l)
+                 and not BOLD_LABEL.match(l)]
 
     emoji = EMOJI.findall(body)
     bang = re.findall(r"(?<![!\s])!(?!\=)", body)
@@ -415,7 +444,7 @@ def check(text: str) -> dict:
     contrast = CONTRAST.findall(body)
     comma_after = [w for w in COMMA_AFTER.findall(body)
                    if w.endswith(COMMA_ENDINGS) and w not in COMMA_EXEMPT]
-    colon_heads = [h for h in heads if re.search(r"\S\s*[:：]\s+\S", h)]
+    colon_heads = [h for h in heads if re.search(r"\S\s*[:：]\s+\S", h) and not STEP_HEAD.match(h)]
     obligation = [p for p in prose_paragraphs(body) if OBLIGATION.search(p)]
 
     cleft = CLEFT.findall(body)
@@ -449,7 +478,9 @@ def check(text: str) -> dict:
     level_mix = speech_level_mix(body)
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
-    followup = FOLLOWUP.findall(body)
+    sents = prose_sentences(body)
+    followup = FOLLOWUP.findall(body) + [s for s in sents[-2:] if CLOSING_OFFER.search(s)]
+    opener = [s for s in sents[:2] if OPENER.search(s)]
     recommend = RECOMMEND.findall(body)
 
     violations = []
@@ -523,7 +554,9 @@ def check(text: str) -> dict:
     add("말투 혼용 (합니다체와 한다체)", level_mix, 0,
         " / ".join(s[-20:] for s in level_mix[:3]))
     add("조사 대치 (X를 영향을 주다)", particle_swap, 0, " / ".join(particle_swap[:3]))
-    add("묻지 않은 후속 제안 (궁금한 점이 있으시면)", followup, 0)
+    add("묻지 않은 후속 제안 (궁금한 점이 있으시면)", followup, 0,
+        " / ".join(f[-24:] for f in followup[:2]))
+    add("첫머리 예고 (설명해 드릴게요)", opener, 0, " / ".join(o[:24] for o in opener[:2]))
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
     add("띄어쓰기 (할수있다, 하고있다)", spacing, 0, " / ".join(s.strip() for s in spacing[:4]))
 
@@ -571,6 +604,7 @@ def check(text: str) -> dict:
             "spacing": len(spacing),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
+            "opener_preview": len(opener),
             "checked_chars": len(body),
         },
     }
