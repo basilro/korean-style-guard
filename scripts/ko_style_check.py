@@ -154,7 +154,7 @@ PRAISE_OPEN = re.compile(
 # 감상형 결말 (11항). 마지막 두 문장에서만 센다. "~하는 것은 어떨까요?", "읽어 볼 가치가 있는 책",
 # "하루의 쉼표가 되어 줄 것입니다". 사람 논문 0건이지만 장르가 달라 검증력이 약하므로 위치를 좁힌다.
 CLOSING_SENTIMENT = re.compile(
-    r"(?:것은|것도|건|면)\s?어떨까요"
+    r"(?:것은|것도|건|(?<![0-9시분일주월년])면)\s?어떨까요"
     r"|(?:볼|읽어\s?볼|들어\s?볼|가\s?볼)\s?(?:만한\s)?가치가\s?(?:있|충분)"
     r"|(?:되어|돼)\s?(?:줄|드릴)\s?(?:것|거)"
     # 축원으로 닫기(20회차). "도움이 되셨으면 좋겠습니다", "응원합니다", "화이팅"
@@ -383,7 +383,7 @@ HON_THING = re.compile(
 # 자기 쪽의 -시-. Yoon(2017)에서 "저희 매장은 세일 안 들어가세요"류는 평균 1.61점이었다.
 # 같은 절 안에서만 본다. 연결어미에서 절이 끝나면 뒤의 -시-는 청자의 일이다.
 SELF_SUBJ = re.compile(
-    r"(?<![가-힣])(?:제가|저는|저희가|저희는|저도|저희도|저희\s[가-힣]+(?:은|는|이|가|에서는|에서도|에서))\s"
+    r"(?<![가-힣])(?:제가|저는|저희가|저희는|저도|저희도|저희\s(?!(?:어머니|아버지|할머니|할아버지|부모님|[가-힣]*님)(?:은|는|이|가|께서))[가-힣]+(?:은|는|이|가|에서는|에서도|에서))\s"
 )
 # 청자나 제삼자가 주어로 들어오면 그 뒤의 -시-는 그 사람의 일이다(저는 고객님이 원하시는).
 OTHER_SUBJ = re.compile(r"(?:님|께서)(?:이|은|는|께서|께|의|도)?$")
@@ -455,6 +455,9 @@ def self_honorifics(body: str):
             w = raw.rstrip(".,!?")
             if OTHER_SUBJ.search(w):
                 break
+            # 관형형 -시는/-신 은 뒤에 오는 명사(손님, 고객)의 일이다(23회차).
+            if w.endswith(("시는", "신")):
+                break
             if HON_FORM.search(w):
                 found.append(m.group(0).strip() + " " + w)
                 break
@@ -494,8 +497,8 @@ def speech_level_mix(body: str):
 # 조사 대치. 장석배(2019)의 영어권 학습자 말뭉치에서 "영향, 도움, 관심" 앞에 "에" 대신
 # 목적격을 쓴 오류가 따로 분류됐다. 사이에 다른 어절이 없을 때만 잡는다.
 PARTICLE_SWAP = re.compile(
-    r"[가-힣][을를]\s(?:(?:큰|많은|깊은|좋은|나쁜|가장\s큰)\s)?영향을\s(?:주|줬|준|미치|미쳤|끼치)"
-    r"|[가-힣][을를]\s(?:큰\s|많은\s)?관심이\s(?:있|많|없)"
+    r"[가-힣][을를]\s(?:(?:큰|많은|깊은|좋은|나쁜|가장\s큰)\s)?영향을\s(?:주(?![는던])|줬(?!던)|준다|미치(?![는던])|미쳤(?!던)|끼치(?![는던]))"
+    r"|[가-힣][을를]\s(?:큰\s|많은\s)?관심이\s(?:있|많|없)(?![는은던])"
 )
 
 
@@ -507,9 +510,9 @@ PARTICLE_SWAP = re.compile(
 # 될수록, 할수록은 어미 -ㄹ수록이고 수많은, 수없이, 실수는 한 단어라 걸리지 않는다.
 SPACING = re.compile(
     r"(?:(?<![가-힣])[할될볼갈올쓸알줄살]|[가-힣]을)수\s?(?:있|없(?!이))"
-    r"|(?<=[가-힣])\s수(?:있|없(?!이))"
+    r"|(?<=[가-힣])\s수있|(?<=[" + "".join(chr(0xAC00 + i) for i in range(11172) if i % 28 == 8) + r"])\s수없(?!이)"
     r"|[가-힣]고있(?=[는다어었으지을습네])"
-    r"|[가-힣]지(?:않[는다아았을습으]|못하)"
+    r"|(?!마지)[가-힣]지(?:않[는다아았을습으]|못하)"
     r"|[가-힣]때문(?=에|이)"
     r"|(?<=[가-힣])\s수\s밖에"
 )
@@ -605,7 +608,9 @@ def unfinished_sentences(body: str):
         if not stem:
             continue
         # 한다체 의문(있는가, 같은가, 무엇인가)은 완결 문장이다(19회차). "가" 하나만 보면 명사 조각을 놓친다.
-        if stem.endswith(("는가", "은가", "인가", "던가", "ㄴ가")):
+        if stem.endswith(("는가", "은가", "인가", "던가", "ㄴ가", "거든", "구나", "려나")):
+            continue
+        if closers is CLOSERS_BANMAL and stem.endswith("대") and len(stem) > 1 and _has_nieun_batchim(stem[-2]):
             continue
         if stem.endswith(CONNECTIVES) or stem[-1] not in closers:
             bad.append(sent)
@@ -678,7 +683,9 @@ def check(text: str) -> dict:
 
     double_neg = DOUBLE_NEG.findall(body)
     hedge = HEDGE_STACK.findall(body)
-    hon_thing = HON_THING.findall(body)
+    # "매장은 2번 출구로 나오시면"처럼 나오고 들어오는 사람이 청자인 안내는 뺀다(23회차).
+    hon_thing = [h for h in HON_THING.findall(body)
+                 if not re.search(r"[은는]\s(?:\S+\s)*?\S*(?:로|에|에서)\s(?:나오|들어가|들어오|도착하|출발하)시(?:면|고|서)", h)]
     hon_self = self_honorifics(body)
     level_mix = speech_level_mix(body)
     particle_swap = PARTICLE_SWAP.findall(body)
