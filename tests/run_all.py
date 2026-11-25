@@ -47,6 +47,17 @@ def check_docs():
     return bad
 
 
+def check_rules_length():
+    """보칙이 SessionStart 주입 상한 안에 드는지 본다.
+
+    Claude Code 는 훅의 additionalContext 를 10,000자로 자른다. 넘으면 파일로 빼고 앞 2,000자만
+    보여 준다. 그러면 보칙 대부분이 세션에 들어가지 않는다. 여유를 두고 9,500자를 문턱으로 둔다.
+    """
+    with open(os.path.join(ROOT, "rules", "ko-style-rules.md"), encoding="utf-8") as fh:
+        n = len(fh.read())
+    return [] if n <= 9500 else [f"보칙 {n}자, 주입 상한 여유선 9,500자 초과"]
+
+
 def check_manifest():
     with open(os.path.join(ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as fh:
         manifest = json.load(fh)
@@ -123,7 +134,8 @@ def main():
             print(r.stdout)
             print(r.stderr)
     for label, fn in (("사본 일치", check_sync), ("문서 자기 검사", check_docs),
-                      ("매니페스트", check_manifest), ("실제 문장 표본", check_samples),
+                      ("매니페스트", check_manifest), ("보칙 길이", check_rules_length),
+                      ("실제 문장 표본", check_samples),
                       ("성능", check_speed)):
         bad = fn()
         print(f"{label}: {'통과' if not bad else '실패'}")
