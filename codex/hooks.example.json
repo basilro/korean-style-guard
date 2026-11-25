@@ -8,6 +8,11 @@
             "type": "command",
             "command": "bash \"/절대/경로/korean-style-guard/hooks/inject-rules.sh\"",
             "timeoutSec": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"/절대/경로/korean-style-guard/hooks/inject-rules.sh\" ko-style-examples.md",
+            "timeoutSec": 10
           }
         ]
       }

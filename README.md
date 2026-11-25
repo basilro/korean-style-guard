@@ -9,6 +9,7 @@ Codex 에서 쓴다.
 | 구성 | 역할 |
 |---|---|
 | `rules/ko-style-rules.md` | 보칙 본문 38항목. 단일 출처 |
+| `rules/ko-style-examples.md` | 항목 번호를 따른 예문 부록. 따로 주입한다 |
 | `hooks/inject-rules.sh` | SessionStart 훅. 보칙을 세션 컨텍스트에 주입 |
 | `hooks/check-output.sh` | Stop 훅. 한국어 질문에 영어로 답했거나 보칙을 어긴 답변을 다시 쓰게 함 |
 | `hooks/check-written-file.sh` | PostToolUse 훅. 방금 쓴 파일을 검사 |
@@ -209,8 +210,14 @@ output style 은 설계상 메인 대화에만 적용된다. 서브에이전트�
 matcher 에 `clear` 와 `compact` 를 넣어 두어 `/clear` 뒤에도 다시 주입된다.
 
 `additionalContext` 는 10,000자가 상한이다. 넘으면 Claude Code 가 본문을 파일로 빼고 앞 2,000자만
-보여 주므로, 보칙 대부분이 세션에 들어가지 않는다. 그래서 보칙 본문에는 지시와 예문만 두고
-근거와 서지는 이 README 에 둔다. `tests/run_all.py` 가 보칙이 9,500자를 넘지 않는지 본다.
+보여 주므로, 보칙 대부분이 세션에 들어가지 않는다. 이 상한은 훅 출력 하나마다 걸리고 여러 훅이 낸
+내용은 모두 전달된다. 그래서 보칙을 두 파일로 나눠 SessionStart 훅 둘로 주입한다.
+
+- `rules/ko-style-rules.md`: 지시와 핵심 예문(보칙 본문)
+- `rules/ko-style-examples.md`: 항목 번호를 따른 예문 부록. 고칠 것, 둘 것, 잘못 고친 것을 싣는다. 새 규칙은 없다
+
+근거와 서지는 이 README 에 둔다. `tests/run_all.py` 가 `hooks.json` 이 부르는 파일마다 9,500자를
+넘지 않는지 본다. 주입 훅은 `rules/` 밖의 파일을 인자로 받지 않는다.
 1.11.0 작업 중에 보칙이 12,987자까지 늘었다가 이 검사로 9,022자로 줄였고, 18회차 뒤에는 9,331자다.
 
 ### Stop 훅이 필요한 이유
@@ -304,7 +311,8 @@ codex/install.sh
 ```
 
 스킬을 `$CODEX_HOME/skills/ko-style/` 에 복사하고 `$CODEX_HOME/hooks.json` 에
-`SessionStart` 와 `Stop` 훅을 넣는다. 여러 번 돌려도 중복되지 않는다.
+`SessionStart` 훅 둘(본문, 부록)과 `Stop`, `PostToolUse` 훅을 넣는다. 여러 번 돌려도 중복되지 않고,
+예전 판이 `python3` 으로 등록한 훅은 실제로 도는 파이썬으로 갈아 끼운다.
 `CODEX_HOME` 을 지정하면 그쪽에 설치한다.
 
 설치 뒤에 한 단계가 남는다. Codex 를 실행해 `/hooks` 에서 두 훅을 신뢰로 표시해야 한다.
@@ -334,6 +342,7 @@ python3 scripts/ko_identifier_check.py 파일.tsx --json
 python3 tests/run_identifier_tests.py
 python3 tests/run_prose_tests.py
 python3 tests/run_lang_tests.py
+python3 tests/run_lang_adversarial.py
 python3 tests/run_all.py      # 위 셋과 사본 일치, 문서 자기 검사, 보칙 길이, 표본, 성능까지
 ```
 

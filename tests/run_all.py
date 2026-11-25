@@ -9,13 +9,14 @@
 import filecmp
 import json
 import os
+import re
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SUITES = ["run_prose_tests.py", "run_lang_tests.py", "run_lang_adversarial.py", "run_identifier_tests.py"]
-DOCS = ["README.md", "rules/ko-style-rules.md", "skills/ko-style/SKILL.md",
+DOCS = ["README.md", "rules/ko-style-rules.md", "rules/ko-style-examples.md", "skills/ko-style/SKILL.md",
         "output-styles/korean-style.md", "commands/ko-check.md"]
 
 
@@ -53,9 +54,21 @@ def check_rules_length():
     Claude Code 는 훅의 additionalContext 를 10,000자로 자른다. 넘으면 파일로 빼고 앞 2,000자만
     보여 준다. 그러면 보칙 대부분이 세션에 들어가지 않는다. 여유를 두고 9,500자를 문턱으로 둔다.
     """
-    with open(os.path.join(ROOT, "rules", "ko-style-rules.md"), encoding="utf-8") as fh:
-        n = len(fh.read())
-    return [] if n <= 9500 else [f"보칙 {n}자, 주입 상한 여유선 9,500자 초과"]
+    bad = []
+    # 주입 훅마다 따로 잰다. hooks.json 이 부르는 파일이 모두 있어야 한다.
+    with open(os.path.join(ROOT, "hooks", "hooks.json"), encoding="utf-8") as fh:
+        hooks_json = fh.read()
+    names = ["ko-style-rules.md"] + re.findall(r"inject-rules\.sh\\\" ([\w.-]+\.md)", hooks_json)
+    for name in names:
+        path = os.path.join(ROOT, "rules", name)
+        if not os.path.exists(path):
+            bad.append(f"hooks.json 이 부르는 {name} 이 없음")
+            continue
+        with open(path, encoding="utf-8") as fh:
+            n = len(fh.read())
+        if n > 9500:
+            bad.append(f"{name} {n}자, 주입 상한 여유선 9,500자 초과")
+    return bad
 
 
 def check_manifest():

@@ -10,6 +10,13 @@
             "shell": "bash",
             "timeout": 10,
             "async": false
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/inject-rules.sh\" ko-style-examples.md",
+            "shell": "bash",
+            "timeout": 10,
+            "async": false
           }
         ]
       }
