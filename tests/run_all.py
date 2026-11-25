@@ -56,6 +56,26 @@ def check_manifest():
     return []
 
 
+def check_speed():
+    """공백 없는 긴 입력에서 이차 시간이 드는 정규식이 다시 들어오지 않았는지 본다.
+
+    Stop 훅의 제한 시간은 15초다. 한 번 6초가 걸린 적이 있어 2초를 문턱으로 둔다.
+    """
+    import time
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    from ko_style_check import check
+    from ko_lang_check import judge
+    bad = []
+    for sample in ["가" * 20000, "a" * 20000, "a." * 10000, "x/" * 10000, "가," * 10000, "a@" * 10000]:
+        start = time.time()
+        check(sample)
+        judge("한국어 질문입니다", sample)
+        took = time.time() - start
+        if took > 2:
+            bad.append(f"{sample[:4]}… {took:.1f}초")
+    return bad
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -71,7 +91,7 @@ def main():
             print(r.stdout)
             print(r.stderr)
     for label, fn in (("사본 일치", check_sync), ("문서 자기 검사", check_docs),
-                      ("매니페스트", check_manifest)):
+                      ("매니페스트", check_manifest), ("성능", check_speed)):
         bad = fn()
         print(f"{label}: {'통과' if not bad else '실패'}")
         for b in bad:
