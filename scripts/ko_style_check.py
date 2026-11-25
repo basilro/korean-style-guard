@@ -660,8 +660,9 @@ def check(text: str) -> dict:
         " / ".join(u[-26:] for u in unfinished[:3]))
     add("부정 대구 (A가 아니라 B)", contrast, 1)
     # 사람 글은 1,000자당 약 1건이었다. 긴 글은 그 두 배(500자당 1건)까지 허용한다.
-    # 고정 상한 5 로는 7회차의 2,500자 안팎 문서 여섯 편 중 다섯이 걸렸다.
-    add("연결어미 뒤 쉼표", comma_after, max(5, len(body) // 500),
+    # 짧은 답변의 바닥은 4다. 사람 논문을 800자로 자른 조각 320개에서 바닥 3 을 넘는 조각이 3.4%,
+    # 4 를 넘는 조각이 0.3%, 5 를 넘는 조각이 0%였다. 쉼표가 몰리는 학술 한다체를 고려해 4 로 둔다.
+    add("연결어미 뒤 쉼표", comma_after, max(4, len(body) // 500),
         " / ".join(w + "," for w in comma_after[:4]))
     add("콜론 부제 헤딩 (X: Y)", colon_heads, 1,
         " / ".join(h.strip()[:30] for h in colon_heads[:3]))
