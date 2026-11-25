@@ -113,7 +113,21 @@ FOLLOWUP = re.compile(
 # 7항(당위 되풀이)과 같은 취지다. 1회차 표본 넷에서 다섯 번 나왔고 사람 글에서는 10만 자당 0.8건이었다.
 RECOMMEND = re.compile(
     r"[가-힣]\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다"
-    r"|중요합니다|중요하다|중요해요)"
+    r"|중요합니다|중요해요)"
+)
+
+# 감상형 결말 (11항). 마지막 두 문장에서만 센다. "~하는 것은 어떨까요?", "읽어 볼 가치가 있는 책",
+# "하루의 쉼표가 되어 줄 것입니다". 사람 논문 0건이지만 장르가 달라 검증력이 약하므로 위치를 좁힌다.
+CLOSING_SENTIMENT = re.compile(
+    r"(?:것은|것도|건|면)\s?어떨까요"
+    r"|(?:볼|읽어\s?볼|들어\s?볼|가\s?볼)\s?(?:만한\s)?가치가\s?(?:있|충분)"
+    r"|(?:되어|돼)\s?(?:줄|드릴)\s?(?:것|거)"
+)
+
+# 문단 머리 접속 부사로 짠 작문 틀(24항). 문장 단위 상한은 문단 머리의 "우선, 또한, 물론, 결국"을 놓친다.
+# 사람 논문에서 문단 머리 표지 비율은 0.205였다. 문단 넷 이상, 표지로 연 문단 셋 이상, 60% 이상일 때만 센다.
+PARA_MARKER = re.compile(
+    r"^(?:우선|먼저|또한|물론|결국|특히|다만|그리고|하지만|그러나|그래서|그런데|따라서|게다가|더불어|한편)(?=[\s,])"
 )
 
 # 끝맺음 제안의 나머지 꼴. 본문 마지막 두 문장에서만 센다. 같은 말이 본문 중간에 오면
@@ -136,6 +150,8 @@ MORE_MANY = re.compile(r"(?<![가-힣])더\s많은\s")
 OPENER = re.compile(
     r"^(?![^.!?]*(?:까지|내일|오늘|나중에|대로|되면|끝나면|회의에서|따로))"
     r"[^.!?]{0,60}?(?:설명|정리|요약|비교|소개)(?:해|하여)\s?드(?:릴게요|리겠습니다|릴께요)[.!]"
+    r"|^(?![^.!?]*(?:까지|내일|오늘\s?중|나중에|대로|되면|끝나면|회의에서|따로))"
+    r"[^.!?]{0,60}?(?:알아|살펴)(?:보아요|봐요|볼게요|볼께요|보겠습니다|볼까요|봅시다)[.!?]"
 )
 
 # 콜론이 볼드 안에 든 라벨(**일시:**)과 목록 머리 라벨(- **장점**:). 회의록과 공문의
@@ -548,7 +564,13 @@ def check(text: str) -> dict:
     spacing = SPACING.findall(body)
     sents = prose_sentences(body)
     followup = FOLLOWUP.findall(body) + [s for s in sents[-2:] if CLOSING_OFFER.search(s)]
-    opener = [s for s in sents[:2] if OPENER.search(s)]
+    # 인사말은 3항이 따로 막으므로 첫 두 문장을 고를 때 건너뛴다.
+    head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
+    opener = [s for s in head if OPENER.search(s)]
+    sentiment = [s for s in sents[-2:] if CLOSING_SENTIMENT.search(s)]
+    paras = prose_paragraphs(body)
+    led = [p for p in paras if PARA_MARKER.match(p)]
+    para_frame = led if len(paras) >= 4 and len(led) >= 3 and len(led) / len(paras) >= 0.6 else []
     recommend = RECOMMEND.findall(body)
     inanimate_pl = INANIMATE_PLURAL.findall(body)
     succ = SUCCESSFULLY.findall(body)
@@ -629,6 +651,8 @@ def check(text: str) -> dict:
         " / ".join(f[-24:] for f in followup[:2]))
     add("첫머리 예고 (설명해 드릴게요)", opener, 0, " / ".join(o[:24] for o in opener[:2]))
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
+    add("감상형 결말 (어떨까요, 가치가 있는)", sentiment, 0, " / ".join(s[-24:] for s in sentiment))
+    add("문단 머리 접속 부사 틀", para_frame, 0, " / ".join(p[:6] for p in para_frame[:4]))
     add("무생물 복수 (단계들, 방법들)", inanimate_pl, 1, " / ".join(inanimate_pl[:3]))
     add("성공적으로 ~되었습니다", succ, 0, " / ".join(succ[:2]))
     add("더 많은 X 되풀이", more_many, 1)
@@ -679,6 +703,8 @@ def check(text: str) -> dict:
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
             "inanimate_plural": len(inanimate_pl),
+            "closing_sentiment": len(sentiment),
+            "paragraph_marker_frame": len(para_frame),
             "successfully": len(succ),
             "more_many": len(more_many),
             "opener_preview": len(opener),
