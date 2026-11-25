@@ -47,13 +47,25 @@ def main() -> int:
     except Exception:
         return 0
 
+    if not isinstance(payload, dict):
+        return 0
+    try:
+        return run(payload)
+    except Exception:
+        # 검사기 결함으로 훅이 죽으면 사용자는 영문 모를 오류를 본다. 검사를 건너뛰는 편이 낫다.
+        return 0
+
+
+def run(payload: dict) -> int:
     is_codex = "turn_id" in payload
 
     # 이미 이 훅 때문에 다시 돌고 있으면 통과시킨다. 무한 루프 방지.
     if payload.get("stop_hook_active"):
         return 0
 
-    message = payload.get("last_assistant_message") or ""
+    message = payload.get("last_assistant_message")
+    if not isinstance(message, str):
+        return 0
 
     # 한국어로 물었는데 영어로 답했으면 한국어로 다시 쓰게 한다.
     # 영어 답변에는 한글이 없어 아래 보칙 검사를 그냥 지나가므로 먼저 본다.

@@ -1,0 +1,5 @@
+{"type":"user","message":{"role":"user","content":"이 오류 왜 나는지 알려 줘"}}
+�� broken line
+[1,2]
+{"type":"user","message":"plain string"}
+{"type":"user","message":{"role":"user","content":"<task>Rewrite the README intro in English</task>"}}

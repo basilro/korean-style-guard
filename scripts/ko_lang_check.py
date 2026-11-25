@@ -39,8 +39,16 @@ PROMPT_NOISE = [
     r"<system-reminder>.*?</system-reminder>",
     r"<(command-[a-z-]+|local-command-[a-z-]+|user-prompt-submit-hook|bash-[a-z]+)>.*?</\1>",
     r"<pasted_content[^>]*>.*?</pasted_content[^>]*>",
-    r"<[a-z_-]+>.*?</[a-z_-]+>",
+    # 이름을 아는 훅 태그만 지운다. 아무 태그나 지우면 사용자가 <task>…</task> 로 감싼 질문까지
+    # 사라지고, 닫는 태그가 없을 때 이차 시간이 든다(코드 검토에서 찾았다).
+    r"<(task-notification|tools-used-before-summary|user-memory-input|local-command-caveat)>.*?</\1>",
 ]
+
+# 영어 글을 다듬어 달라는 요청. 질문에 영어 산문 줄이 붙어 있고 교정 동사가 있으면 영어 답변이 정상이다.
+EDIT_VERB = re.compile(r"다듬|고쳐|고치|교정|윤문|첨삭|손봐|proofread|polish|fix\s+(?:the\s+)?grammar", re.I)
+# 관례상 영어로 쓰는 경우가 많은 산출물. 프로젝트마다 다르므로 판정하지 않는 쪽으로 둔다.
+ENGLISH_ARTIFACT = re.compile(r"커밋\s?메시지|commit\s+message|README|PR\s?(?:설명|본문|제목)|릴리스\s?노트", re.I)
+EN_PROSE_LINE = re.compile(r"^(?=[^가-힣\n]*$)[^\n]*(?:[A-Za-z]{2,}[ ,.;:'\"-]+){5,}", re.M)
 
 # 저자가 산문으로 쓰지 않은 부분. 이 안의 영어는 세지 않는다.
 MASKS = [
@@ -123,6 +131,10 @@ def is_korean_prompt(prompt: str) -> bool:
 def wants_english(prompt: str) -> bool:
     """영어 출력을 청했는가. "한국어로 번역해 줘"처럼 번역 방향이 한국어면 청하지 않은 것이다."""
     p = clean_prompt(prompt)
+    if ENGLISH_ARTIFACT.search(p):
+        return True
+    if EDIT_VERB.search(p) and EN_PROSE_LINE.search(prompt):
+        return True
     if not WANTS_ENGLISH.search(p):
         return False
     return not (TO_KOREAN.search(p) and not EXPLICIT_ENGLISH.search(p))
@@ -175,24 +187,33 @@ def last_user_prompt(transcript_path: str) -> str:
     도구 결과도 type 이 user 로 들어오므로 글이 없는 항목은 건너뛴다.
     훅이 덧붙인 메타 항목과 압축 요약도 건너뛴다.
     """
+    if not isinstance(transcript_path, str) or not transcript_path:
+        return ""
     try:
-        with open(transcript_path, encoding="utf-8") as fh:
+        # UTF-8 이 아닌 바이트가 섞여도 훅이 죽지 않게 바꿔 읽는다.
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
             lines = fh.readlines()
-    except (OSError, TypeError):
+    except (OSError, ValueError):
         return ""
     for raw in reversed(lines):
         try:
             entry = json.loads(raw)
         except ValueError:
             continue
+        if not isinstance(entry, dict):
+            continue
         if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isCompactSummary"):
             continue
-        msg = entry.get("message") or {}
+        msg = entry.get("message")
+        if not isinstance(msg, dict):
+            continue
         text = _text_of(msg.get("content"))
         if not text.strip():
             continue
+        # 사람이 친 글이 있는데 훅 꼬리표를 걷고 나니 비었으면, 무엇을 물었는지 모르는 것이다.
+        # 앞의 질문으로 거슬러 가지 않고 판정을 멈춘다.
         if not clean_prompt(text).strip():
-            continue
+            return ""
         return text
     return ""
 

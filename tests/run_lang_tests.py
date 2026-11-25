@@ -80,6 +80,13 @@ CASES = [
     ("korean_table_ok", KO_Q,
      "| 지역 | 주요 업체 | 강점 |\n|---|---|---|\n| 중국 | CATL, BYD | 가격 경쟁력과 LFP 기술 우위 |\n"
      "| 한국 | LG, SK On | 고에너지 밀도 삼원계 |\n\n표처럼 지역마다 강점이 다릅니다.", False),
+    # 코드 정확성 검토에서 찾은 오탐
+    ("polish_english_paragraph_ok",
+     "이 README 첫 문단을 자연스럽게 다듬어 줘.\n\nThis tool count style issues in Korean output and it block them.",
+     EN_A, False),
+    ("commit_message_ok", "커밋 메시지 써 줘", EN_A, False),
+    ("fix_grammar_ok",
+     "문법 좀 고쳐 줘\nI has went to the store yesterday and buyed some apple for my mother.", EN_A, False),
     ("polish_english_email_ok", "이 영어 이메일 다듬어줘\n\nHi team, I want to share update.", EN_A, False),
 ]
 
@@ -107,7 +114,12 @@ def run_transcript():
     if last_user_prompt(os.path.join(HERE, "lang", "missing.jsonl")) != "":
         failed += 1
         print("실패 transcript_missing")
-    return failed, 3
+    # 깨진 기록과 사용자가 태그로 감싼 질문(코드 정확성 검토)
+    p = last_user_prompt(os.path.join(HERE, "lang", "transcript_broken.jsonl"))
+    if "<task>" not in p:
+        failed += 1
+        print(f"실패 transcript_broken_and_tagged: {p!r}")
+    return failed, 4
 
 
 def run_hook():
