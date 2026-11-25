@@ -594,6 +594,9 @@ def unfinished_sentences(body: str):
         stem = sent.rstrip(".!?\"'”’) ").rstrip()
         if not stem:
             continue
+        # 한다체 의문(있는가, 같은가, 무엇인가)은 완결 문장이다(19회차). "가" 하나만 보면 명사 조각을 놓친다.
+        if stem.endswith(("는가", "은가", "인가", "던가", "ㄴ가")):
+            continue
         if stem.endswith(CONNECTIVES) or stem[-1] not in CLOSERS:
             bad.append(sent)
     return bad
