@@ -358,7 +358,9 @@ PLUPERFECT = re.compile(r"(?:았|었|였|했)었(?=[다습던어고는지])")
 # 일본어와 영어에서 온 관용구. 에 다름 아니다, ~을 요하다, 과언이 아니다, one of the most.
 CALQUE_IDIOM = re.compile(
     r"다름\s?아니|(?:을|를)\s?요하|과언이\s?아니"
-    r"|가장\s[가-힣]+\s(?:[가-힣]+\s)?(?:것\s)?중\s?(?:의\s)?하나"
+    # 가장과 중 사이는 네 어절까지 받는다("가장 많이 쓰이는 조회 함수 중 하나"). 구조 번역투 측정에서
+    # AI 원문 3건, 고친 글 0건이었다.
+    r"|가장\s(?:[가-힣]+\s){1,4}(?:것\s)?중\s?(?:의\s)?하나"
 )
 
 # 겹말. 한자어가 이미 품은 뜻을 고유어로 한 번 더 쓴다.
@@ -501,6 +503,28 @@ def field_blocks(lines):
 
 
 PUNCT_ODD = re.compile(r"(?<=[가-힣])\s?;|(?:다|요|죠)\s?[:：](?=\s*$|\s*\n|\s[가-힣])", re.M)
+SPACED_HYPHEN = re.compile(r"(?<=[가-힣.)\]’”]) - (?=[가-힣A-Za-z0-9(\"“‘])")
+PREDICATE_END = re.compile(r"(?:다|요|죠)[.!?]?$")
+PREDICATE_IN = re.compile(r"(?:다|요|죠)(?:[.!?]|\s|$)")
+
+
+def spaced_hyphen_dashes(body):
+    """띄어 쓴 하이픈 가운데 문장을 잇는 대시로 쓴 것만 돌려준다.
+
+    "하나입니다 - 권한입니다"처럼 한쪽에 서술어가 있으면 대시다. "사이트 설정 - 개인 정보 보호 -
+    콘텐츠 허용"이나 "스캔 - 폴더" 같은 메뉴 경로는 양쪽이 명사구라 뺀다. 사람이 쓴 사용 설명서
+    37조각 가운데 7조각이 메뉴 경로 하나로 걸렸다.
+    """
+    out = []
+    for line in body.split("\n"):
+        for m in SPACED_HYPHEN.finditer(line):
+            left = line[:m.start()].rstrip()
+            right = SPACED_HYPHEN.split(line[m.end():], maxsplit=1)[0]
+            if PREDICATE_END.search(left) or PREDICATE_IN.search(right):
+                out.append(m.group())
+    return out
+
+
 TOPIC = re.compile(r"([가-힣]{2,})(?:은|는)\s")
 
 
@@ -708,7 +732,7 @@ def check(text: str) -> dict:
     lines = body.split("\n")
 
     # 엠대시 대신 띄어 쓴 하이픈("하나입니다 - 권한입니다")도 대시로 센다. 범위의 "3-5일"은 붙여 써서 빠진다.
-    dash = re.findall(r"—|–|(?<= )--(?= )|(?<=[가-힣.)\]’”]) - (?=[가-힣A-Za-z0-9(\"“‘])", body)
+    dash = re.findall(r"—|–|(?<= )--(?= )", body) + spaced_hyphen_dashes(body)
     # 한글 맞춤법 문장부호 규정에 없는 쌍반점과, 문장을 쌍점으로 끝내는 "다음과 같습니다:"
     odd_punct = PUNCT_ODD.findall(body)
     topic_rep = topic_repeats(body)
@@ -829,7 +853,9 @@ def check(text: str) -> dict:
 
     add("엠·엔 대시", dash, 0)
     add("어긋난 문장부호 (쌍반점, 문장 끝 쌍점)", odd_punct, 0)
-    add("이웃 문장의 주제어 되풀이", topic_rep, 0, " / ".join(topic_rep[:2]))
+    # 위키백과 2022년 판(한글 14만 자)에서 백과식 주제 재진술이 7.8건(10만 자당), AI 원문은 0.5건이었다.
+    # 한 번은 사람 글의 버릇이라 허용하고 두 번부터 센다.
+    add("이웃 문장의 주제어 되풀이", topic_rep, 1, " / ".join(topic_rep[:2]))
     add("완결 문장 볼드", bold_sentence, 0,
         " / ".join(b[:28] for b in bold_sentence[:3]))
     add("줄머리 볼드", bold_lead, 0,
