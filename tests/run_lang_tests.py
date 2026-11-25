@@ -85,6 +85,9 @@ CASES = [
      "이 README 첫 문단을 자연스럽게 다듬어 줘.\n\nThis tool count style issues in Korean output and it block them.",
      EN_A, False),
     ("commit_message_ok", "커밋 메시지 써 줘", EN_A, False),
+    ("readme_write_ok", "이 변경으로 README 설치 절을 작성해 줘", EN_A, False),
+    ("readme_summary_english", "이 README 요약해 줘\n\nThis project provides a CLI that syncs files "
+     "between local folders and remote buckets with resumable uploads.", EN_A, True),
     ("fix_grammar_ok",
      "문법 좀 고쳐 줘\nI has went to the store yesterday and buyed some apple for my mother.", EN_A, False),
     ("polish_english_email_ok", "이 영어 이메일 다듬어줘\n\nHi team, I want to share update.", EN_A, False),

@@ -47,7 +47,12 @@ PROMPT_NOISE = [
 # 영어 글을 다듬어 달라는 요청. 질문에 영어 산문 줄이 붙어 있고 교정 동사가 있으면 영어 답변이 정상이다.
 EDIT_VERB = re.compile(r"다듬|고쳐|고치|교정|윤문|첨삭|손봐|proofread|polish|fix\s+(?:the\s+)?grammar", re.I)
 # 관례상 영어로 쓰는 경우가 많은 산출물. 프로젝트마다 다르므로 판정하지 않는 쪽으로 둔다.
-ENGLISH_ARTIFACT = re.compile(r"커밋\s?메시지|commit\s+message|README|PR\s?(?:설명|본문|제목)|릴리스\s?노트", re.I)
+# 산출물을 "써 달라"는 요청일 때만 본다. "이 README 요약해 줘"에 영어로 답하면 막아야 한다.
+ENGLISH_ARTIFACT = re.compile(
+    r"(?:커밋\s?메시지|commit\s+message|README|PR\s?(?:설명|본문|제목)|릴리스\s?노트)"
+    r"[^\n.?!]{0,20}?(?:써|쓰|작성|만들|적어|달아|붙여)",
+    re.I,
+)
 EN_PROSE_LINE = re.compile(r"^(?=[^가-힣\n]*$)[^\n]*(?:[A-Za-z]{2,}[ ,.;:'\"-]+){5,}", re.M)
 
 # 저자가 산문으로 쓰지 않은 부분. 이 안의 영어는 세지 않는다.
