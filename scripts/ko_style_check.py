@@ -144,7 +144,7 @@ RECOMMEND = re.compile(
     r"[가-힣]는\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다"
     r"|중요합니다|중요해요)"
     # 15회차: "~하는 것을 권장합니다", "~해 보시기를 권장합니다", "권장드립니다"
-    # "~하시기를 권합니다"는 한 번은 세지 않는다. 맺는 틀로 굳히지 않는 것은 쓰는 법으로 다룬다(7항).
+    # "~하시기를 권합니다"는 여기서 세지 않고 아래 REC_TAIL 이 센다(3회차).
     r"|[가-힣]는\s?것을\s?(?:권장|권|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
     r"|[가-힣]기를\s?(?:권장|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
     r"|권장드(?:립니다|려요)"
@@ -152,6 +152,43 @@ RECOMMEND = re.compile(
     # 지시어가 붙은 "이 점이 중요합니다"는 빼고 관형절로 싼 꼴만 센다.
     r"|(?:다는|라는)\s?점이\s?(?:중요합니다|중요해요)"
 )
+
+# 판에 박힌 권고 꼬리(7항). 3회차: 위키 0%, fixed 2.6%, r0 16.7%, outB5 91.7%(글 단위).
+# 한 글에 두 번 쓴 곳은 어디에도 없어 상한 0. "의사는 휴식을 권했습니다"와 "검진을 받으시기 바랍니다"는 세지 않는다.
+REC_TAIL = re.compile(
+    r"(?:시길|시기를|기를)\s?권(?:합니다|해요|해\s?드립니다|해\s?드려요)|권해\s?드립니다"
+)
+
+# 한 목록 안의 종결 섞임(K9). 세 줄 이상 목록에서 해요, 권유, 합니다가 둘 이상 섞인 것. counts 에만 남긴다.
+LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
+
+
+def _end_kind(s: str) -> str:
+    words = s.split()
+    w = re.sub(r"[^가-힣]+$", "", words[-1]) if words else ""
+    if re.search(r"(?:세요|십시오)$", w):
+        return "권유"
+    if w.endswith("요"):
+        return "해요"
+    if w.endswith("니다"):
+        return "합니다"
+    return ""
+
+
+def mixed_lists(body: str):
+    out, cur = [], []
+    for line in body.split("\n") + [""]:
+        m = LIST_ITEM.match(line)
+        if m:
+            cur.append(m.group(1))
+            continue
+        if len(cur) >= 3:
+            kinds = {_end_kind(x) for x in cur} - {""}
+            if len(kinds) >= 2:
+                out.append(cur[0][:20])
+        cur = []
+    return out
+
 
 # 질문을 칭찬하며 여는 첫말(3항의 인사말과 같은 자리). 처음 두 문장에서만 센다.
 PRAISE_OPEN = re.compile(
@@ -895,6 +932,8 @@ def check(text: str) -> dict:
     led = [p for p in paras if PARA_MARKER.match(p)]
     para_frame = led if len(paras) >= 4 and len(led) >= 3 and len(led) / len(paras) >= 0.6 else []
     recommend = RECOMMEND.findall(body)
+    rec_tail = REC_TAIL.findall(body)
+    mixed_list = mixed_lists(body)
     inanimate_pl = INANIMATE_PLURAL.findall(body)
     succ = SUCCESSFULLY.findall(body)
     more_many = MORE_MANY.findall(body)
@@ -994,6 +1033,8 @@ def check(text: str) -> dict:
         " / ".join(f[-24:] for f in followup[:2]))
     add("첫머리 예고 (설명해 드릴게요)", opener, 0, " / ".join(o[:24] for o in opener[:2]))
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
+    add("판에 박힌 권고 꼬리 (~하시길 권합니다)", [m for m in REC_TAIL.finditer(body)], 0,
+        " / ".join(body[max(0, m.start() - 10):m.end()] for m in REC_TAIL.finditer(body)))
     add("어림 표지 겹침 (대략 ~ 정도)", approx, 1, " / ".join(approx[:2]))
     add("~하는 데 도움이 됩니다 되풀이", helps, 1)
     add("공감·안심 상투 (자연스러운 일입니다)", empathy, 0,
@@ -1061,6 +1102,8 @@ def check(text: str) -> dict:
             "mail_headings": len(mail_heads),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
+            "rec_tail_stamped": len(rec_tail),
+            "mixed_list_endings": len(mixed_list),
             "inanimate_plural": len(inanimate_pl),
             "closing_sentiment": len(sentiment),
             "approx_stack": len(approx),

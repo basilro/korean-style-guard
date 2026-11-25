@@ -493,9 +493,11 @@ CASES = [
     ('topic_repeat_ok',
      '원두는 밀폐 용기에 담습니다. 빛을 피해 보관합니다. 분쇄한 가루는 일주일 안에 씁니다.',
      [], ['이웃 문장의 주제어 되풀이']),
+    # 3회차: '~하시기를 권합니다'는 예전에 '권장드립니다'의 대체로 허용했으나, 위키 0%·r0 16.7%·outB5 91.7%로
+    # 판에 박힌 꼬리라 별도 항목(REC_TAIL)이 센다. '좋습니다' 계열 항목에는 여전히 걸리지 않고, 새 항목에는 걸린다.
     ('recommend_kwonhamnida_ok',
      '두 상품 가운데 DC형을 고르시기를 권합니다. 수익률은 직접 확인하세요.',
-     [], ['권고 꼬리 (~하는 것이 좋습니다)']),
+     ['판에 박힌 권고 꼬리 (~하시길 권합니다)'], ['권고 꼬리 (~하는 것이 좋습니다)']),
     ('reassure_worry',
      '충돌은 표시된 줄만 고치면 됩니다. 너무 걱정하지 않으셔도 됩니다.',
      ['공감·안심 상투 (자연스러운 일입니다)'], []),
@@ -761,12 +763,31 @@ CASES = [
     ('view_owner_ok',
      '저는 수업 시간에만 제한하는 편이 낫다고 봅니다. 연구자들은 기압이 원인이라고 봅니다.',
      [], ['주체 없는 견해 (~다고 봅니다)', '자기 높임 (제가 확인하시겠습니다)']),
-    ('recommend_once_ok',
+    # 3회차: 한 번도 허용하지 않는다(recommend_once_ok 를 뒤집음). 이유는 위 recommend_kwonhamnida_ok 주석.
+    ('recommend_once_now_hit',
      '검사를 받아 보시기를 권합니다.',
-     [], ['권고 꼬리 (~하는 것이 좋습니다)']),
+     ['판에 박힌 권고 꼬리 (~하시길 권합니다)'], ['권고 꼬리 (~하는 것이 좋습니다)']),
+    ('rec_tail_hit',
+     '통증이 이어지면 진료를 받아 보시기를 권합니다.',
+     ['판에 박힌 권고 꼬리 (~하시길 권합니다)'], []),
+    ('rec_tail_gil_hit',
+     '계약 전에 등기부등본을 확인하시길 권해 드립니다.',
+     ['판에 박힌 권고 꼬리 (~하시길 권합니다)'], []),
+    ('rec_tail_ok',
+     '통증이 사흘 넘게 이어지면 정형외과에서 진료를 받아 보세요. 의사는 휴식을 권했습니다. '
+     '운동을 쉬는 편이 낫습니다. 검진을 받으시기 바랍니다.',
+     [], ['판에 박힌 권고 꼬리 (~하시길 권합니다)']),
     ('comma_noun_ok',
      '참고 자료와 경고 문구, 광고 화면을 정리했습니다.',
      [], ['쉼표 없는 긴 산문 (끊어 읽을 자리에 하나 두기)']),
+]
+
+
+COUNT_CASES = [
+    ('mixed_list_hit', '1. 탐색기를 여세요.\n2. 보기를 눌러요.\n3. 확장명에 체크하세요.', 1),
+    ('mixed_list_same_ok', '1. 탐색기를 여세요.\n2. 보기를 누르세요.\n3. 확장명에 체크하세요.', 0),
+    ('mixed_list_nouns_ok', '- 의자 스쿼트 10회\n- 벽 푸시업 10회\n- 무릎 플랭크 20초', 0),
+    ('mixed_list_two_items_ok', '- 탐색기를 여세요.\n- 보기를 눌러요.', 0),
 ]
 
 
@@ -779,7 +800,14 @@ def main():
         if missing or extra:
             failed += 1
             print(f"실패 {name}: 빠짐 {missing} / 잘못 잡음 {extra}")
-    print(f"{len(CASES) - failed}/{len(CASES)} 통과")
+    # K9 한 목록 안의 종결 섞임은 위반이 아니라 counts 값으로 본다.
+    for name, text, want in COUNT_CASES:
+        got = check(text)["counts"]["mixed_list_endings"]
+        if got != want:
+            failed += 1
+            print(f"실패 {name}: mixed_list_endings {got} (기대 {want})")
+    total = len(CASES) + len(COUNT_CASES)
+    print(f"{total - failed}/{total} 통과")
     return 1 if failed else 0
 
 
