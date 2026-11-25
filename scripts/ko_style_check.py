@@ -144,7 +144,9 @@ RECOMMEND = re.compile(
     r"[가-힣]는\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다"
     r"|중요합니다|중요해요)"
     # 15회차: "~하는 것을 권장합니다", "~해 보시기를 권장합니다", "권장드립니다"
-    r"|[가-힣](?:는\s?것을|기를)\s?(?:권장|권|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
+    # "~하시기를 권합니다"는 판단의 주인을 밝힌 권고라 세지 않는다(7항, 비교 시험 심사).
+    r"|[가-힣]는\s?것을\s?(?:권장|권|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
+    r"|[가-힣]기를\s?(?:권장|추천)(?:합니다|드립니다|해요|드려요|해\s?드립니다)"
     r"|권장드(?:립니다|려요)"
     # 25회차: "예방접종으로 위험을 줄일 수 있다는 점이 중요합니다". 사람 글과 고친 글에서 0건.
     # 지시어가 붙은 "이 점이 중요합니다"는 빼고 관형절로 싼 꼴만 센다.
@@ -495,6 +497,26 @@ def field_blocks(lines):
     return blocks
 
 
+PUNCT_ODD = re.compile(r"(?<=[가-힣])\s?;|(?:다|요|죠)\s?[:：](?=\s*$|\s*\n|\s[가-힣])", re.M)
+TOPIC = re.compile(r"([가-힣]{2,})(?:은|는)\s")
+
+
+def topic_repeats(body: str):
+    """한 문단 안에서 이웃한 두 문장을 같은 주제어로 여는 곳("원두는 … 원두는 …").
+
+    고쳐 쓰다 생기기 쉽다. 문단이 바뀌면 같은 주제어로 다시 여는 것이 자연스럽다
+    (보도자료 끝의 회사 소개 문단 등). 그래서 문단 안에서만 본다.
+    """
+    out = []
+    for para in prose_paragraphs(body):
+        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", para) if s.strip()]
+        for a, b in zip(sents, sents[1:]):
+            ma, mb = TOPIC.match(a), TOPIC.match(b)
+            if ma and mb and ma.group(1) == mb.group(1):
+                out.append(ma.group(0).strip())
+    return out
+
+
 def _has_nieun_batchim(ch: str) -> bool:
     code = ord(ch) - 0xAC00
     return 0 <= code < 11172 and code % 28 == 4
@@ -682,7 +704,11 @@ def check(text: str) -> dict:
     body = strip_noncounting(text)
     lines = body.split("\n")
 
-    dash = re.findall(r"—|–|(?<= )--(?= )", body)
+    # 엠대시 대신 띄어 쓴 하이픈("하나입니다 - 권한입니다")도 대시로 센다. 범위의 "3-5일"은 붙여 써서 빠진다.
+    dash = re.findall(r"—|–|(?<= )--(?= )|(?<=[가-힣.)\]’”]) - (?=[가-힣A-Za-z0-9(\"“‘])", body)
+    # 한글 맞춤법 문장부호 규정에 없는 쌍반점과, 문장을 쌍점으로 끝내는 "다음과 같습니다:"
+    odd_punct = PUNCT_ODD.findall(body)
+    topic_rep = topic_repeats(body)
 
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
     # 인용만 감싼 볼드(**"열심히 하겠습니다."**)는 완결 문장 볼드로 세지 않는다. 총량에는 든다.
@@ -799,6 +825,8 @@ def check(text: str) -> dict:
             })
 
     add("엠·엔 대시", dash, 0)
+    add("어긋난 문장부호 (쌍반점, 문장 끝 쌍점)", odd_punct, 0)
+    add("이웃 문장의 주제어 되풀이", topic_rep, 0, " / ".join(topic_rep[:2]))
     add("완결 문장 볼드", bold_sentence, 0,
         " / ".join(b[:28] for b in bold_sentence[:3]))
     add("줄머리 볼드", bold_lead, 0,
@@ -889,6 +917,8 @@ def check(text: str) -> dict:
         "passed": not violations,
         "counts": {
             "dash": len(dash),
+            "odd_punctuation": len(odd_punct),
+            "topic_repeat": len(topic_rep),
             "bold": len(bold_all),
             "emoji": len(emoji),
             "exclamation": len(bang),
