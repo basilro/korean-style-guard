@@ -102,19 +102,18 @@ HOLLOW_CAVEAT = re.compile(
     re.M,
 )
 
-# 결말부 시간지평 (D-11). 본문 뒤쪽 30% 에서 "향후", "앞으로"로 여는 문장.
-# 위치를 빼면 사람도 쓰지만, 결말 위치에서는 사람 0건 대 AI 12편이었다.
 # 묻지 않은 후속 제안 (11항). "추가로 궁금한 점이 있으시면 말씀해 주세요"로 닫는 꼴.
 # 고객센터 안내처럼 연락처를 알려 주는 문장은 "말씀, 알려, 물어, 질문"으로 끝나지 않아 빠진다.
 FOLLOWUP = re.compile(
-    r"(?:궁금한|필요한|추가)[가-힣\s]{0,12}?(?:점|사항|부분)[이가]?\s?(?:있으시|있으면|생기시|생기면)[가-힣]*\s"
-    r"(?:언제든(?:지)?\s|편하게\s)*(?:말씀|알려|물어|질문)"
+    r"(?:궁금한|궁금하신|필요한|필요하신|추가)[가-힣\s]{0,12}?(?:점|사항|부분|내용|문구|것)[이가]?\s?"
+    r"(?:있으시|있으면|생기시|생기면)[가-힣]*\s(?:언제든(?:지)?\s|편하게\s)*(?:말씀|알려|물어|질문)"
 )
 
 # 권고 꼬리 되풀이. "~하는 것이 좋습니다/바람직합니다/권장됩니다"가 문단마다 같은 자리에 온다.
 # 7항(당위 되풀이)과 같은 취지다. 1회차 표본 넷에서 다섯 번 나왔고 사람 글에서는 10만 자당 0.8건이었다.
 RECOMMEND = re.compile(
-    r"[가-힣]\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다)"
+    r"[가-힣]\s?것이\s?(?:좋습니다|좋겠습니다|좋아요|좋다|좋겠다|바람직합니다|바람직하다|권장됩니다|권장된다"
+    r"|중요합니다|중요하다|중요해요)"
 )
 
 # 끝맺음 제안의 나머지 꼴. 본문 마지막 두 문장에서만 센다. 같은 말이 본문 중간에 오면
@@ -123,7 +122,14 @@ CLOSING_OFFER = re.compile(
     r"(?:필요하시면|필요하면|원하시면|원하면|더\s?알고\s?싶)[^.!?]{0,40}"
     r"(?:말씀해|알려|질문해|물어봐)\s?(?:주세요|주십시오|줘|주시면|주시기)"
     r"|(?:공유해|보내|알려)\s?주시면[^.!?]{0,20}(?:도와|안내해|확인해|살펴)\s?드리"
+    r"|(?:필요하시면|필요하면|원하시면|원하면)[^.!?]{0,40}(?:만들어|정리해|작성해|바꿔|준비해)\s?드릴\s?수\s?있"
 )
+
+# successfully 직역. 완료 문구는 "저장되었습니다"로 충분하다. 사람 글 0건.
+SUCCESSFULLY = re.compile(r"성공적으로\s(?:[가-힣]+\s)?[가-힣]*(?:되었|됐|완료되|완료했)")
+
+# more 직역 "더 많은 X"의 되풀이. 한 번은 허용한다. 사람 글 10만 자당 1.4건.
+MORE_MANY = re.compile(r"(?<![가-힣])더\s많은\s")
 
 # 첫머리 예고 (10항). "~에 대해 쉽게 설명해 드릴게요"처럼 할 일을 예고하며 여는 문장.
 # 본문 처음 두 문장에서만 센다. 시점이나 조건이 붙은 약속("내일까지 정리해 드리겠습니다")은 뺀다.
@@ -144,6 +150,8 @@ STEP_HEAD = re.compile(
     r"|^#{1,6}\s*(?:Step|STEP|Part|PART|Q|부록)\s?[0-9A-Z]+\s*[:：]"
 )
 
+# 결말부 시간지평 (D-11). 본문 뒤쪽 30% 에서 "향후", "앞으로"로 여는 문장.
+# 위치를 빼면 사람도 쓰지만, 결말 위치에서는 사람 0건 대 AI 12편이었다.
 HORIZON = re.compile(r"^(?:향후|앞으로|장기적으로|중장기적으로|머지않아)(?:는|에는)?[\s,]")
 
 
@@ -162,7 +170,11 @@ PREP_CALQUE = re.compile(
 )
 
 # have 를 옮긴 소유 구문. "인자를 가지고 있다", "권한을 가진".
-POSSESS = re.compile(r"(?:을|를)\s?(?:가지고\s?있|가진(?=\s)|갖고\s?있)")
+# 활용형까지 본다(가지는, 가집니다, 갖는다). "가방을 가지고 왔다", "시간을 가지고"는 걸리지 않는다.
+POSSESS = re.compile(
+    r"(?:을|를)\s?(?:가지(?:고\s?있|는(?=\s)|며(?=\s)|게\s?되)|가집니다|가진다|가졌|가진(?=\s)"
+    r"|갖고\s?있|갖는(?=\s)|갖습니다|갖는다)"
+)
 
 # 피동을 두 번 겹친 꼴. 되다/보이다/쓰이다/잊히다로 충분하다.
 DOUBLE_PASSIVE = re.compile(
@@ -176,7 +188,16 @@ PLURAL_DUP = re.compile(
 )
 
 # 앞 명사를 받는 3인칭 대명사.
-PRONOUN = re.compile(r"(?<![가-힣])(?:그것|그녀|그들)(?:은|는|이|가|을|를|의|에게|과|와|도|만)?(?![가-힣])")
+PRONOUN = re.compile(
+    r"(?<![가-힣])(?:그것|그녀|그들)(?:은|는|이|가|을|를|의|에게|과|와|도|만)?(?![가-힣])"
+    r"|(?<![가-힣])(?:이것|그것|저것)들"
+)
+
+# 무생물 명사의 복수 "-들"(22항). 영어 복수를 따라 붙인 꼴이다. "사람들", "값들", "파일들"은 목록에 없다.
+INANIMATE_PLURAL = re.compile(
+    r"(?<![가-힣])(?:요소|단계|방법|호출|기능|설정|항목|요청|결과|함수|변수|모듈|옵션|버전|경우|부분|조건"
+    r"|문제|특징|장점|단점|과정|방식|규칙|명령|도구)들(?=[이가을를은는의과와도에로만]|\s|$)"
+)
 
 # 문장 끝 "~것이다". "끝날 것입니다"처럼 ㄹ 관형형 뒤의 추측과 예정은 뺀다.
 GEOT_END = re.compile(r"([가-힣])\s?것(?:이다|입니다|이에요|이죠)[.!?]")
@@ -251,29 +272,69 @@ HEDGE_STACK = re.compile(
 THING_NOUNS = ("결과|오류|에러|파일|함수|코드|설정|화면|메뉴|제품|상품|커피|음료|서버|문서|링크"
                "|메시지|버전|업데이트|배송|택배|요금|가격|비용|프로그램|앱|기능|빌드|테스트|로그"
                "|데이터|값|창|버튼|페이지|사이트|계정|비밀번호|설치|작업|명령|응답|요청|이메일|메일")
+THING_NOUNS += ("|포인트|쿠폰|적립금|재고|사이즈|색상|옵션|금액|배송비|할인|혜택|점검|시스템|서비스"
+                "|매장|좌석|객실|티켓|상품권|영수증|송장")
+# 3회차 검토에서 챗봇 말투로 시험했더니 8개 중 1개만 잡혀 넓혔다. 은/는 주어, "적립되셨습니다"처럼
+# 한자어+되다, "45,000원이세요", "품절이세요"를 받는다. "쓰실 수 있으세요"의 "수 있으"는 뺀다.
 HON_THING = re.compile(
-    rf"(?<![가-힣])(?:{THING_NOUNS})(?:이|가)\s(?:[가-힣]+\s)?"
-    r"(?:나오|되|있으|없으|발생하|뜨|들어가|도착하|걸리|완료되|준비되|적용되|열리|닫히|끝나|바뀌)"
+    rf"(?<![가-힣])(?:{THING_NOUNS})(?:이|가|은|는)\s(?:[가-힣0-9,]+\s){{0,2}}(?<!수\s)"
+    r"(?:[가-힣]{0,3}되|나오|있으|없으|발생하|뜨|들어가|들어오|도착하|출발하|걸리|열리|닫히|끝나|바뀌)"
     r"(?:세요|셨|십니|시는|시면|실|신)"
+    r"|[0-9][0-9,]*\s?원이(?:세요|십니다|셔요|셨)"
+    r"|(?<![가-힣])(?:품절|매진|무료)이(?:세요|십니다|셔요)"
 )
 
 # 자기 쪽의 -시-. Yoon(2017)에서 "저희 매장은 세일 안 들어가세요"류는 평균 1.61점이었다.
 # 같은 절 안에서만 본다. 연결어미에서 절이 끝나면 뒤의 -시-는 청자의 일이다.
-SELF_SUBJ = re.compile(r"(?<![가-힣])(?:제가|저는|저희가|저희는|저도|저희도)\s")
+SELF_SUBJ = re.compile(
+    r"(?<![가-힣])(?:제가|저는|저희가|저희는|저도|저희도|저희\s[가-힣]+(?:은|는|이|가|에서는|에서도|에서))\s"
+)
+# 청자나 제삼자가 주어로 들어오면 그 뒤의 -시-는 그 사람의 일이다(저는 고객님이 원하시는).
+OTHER_SUBJ = re.compile(r"(?:님|께서)(?:이|은|는|께서|께|의|도)?$")
 HON_FORM = re.compile(r"(?:시겠|셨|십니|세요|셔요|셔서|시고|시는|신다|실\b)")
 CLAUSE_END = re.compile(r"(?:면|고|서|니까|는데|은데|지만|도록|려고|러|며|게|든지)[,]?$")
+
+
+FIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*([^*\n]{1,12}?)(?:\*\*\s*[:：]|[:：]\s*\*\*)\s*(\S[^\n]*)$")
+SENTENCE_VALUE = re.compile(r"[.!?]\s*$|(?:다|요|죠)\s*$|(?:다|요)[.!?]")
+
+
+def field_blocks(lines):
+    """값이 문장이 아닌 짧은 서식 칸이 두 줄 이상 이어진 덩어리의 줄 번호 묶음을 돌려준다."""
+    blocks, cur = [], []
+    for i, line in enumerate(lines):
+        m = FIELD.match(line)
+        if m and len(m.group(2)) <= 40 and not SENTENCE_VALUE.search(m.group(2)):
+            cur.append(i)
+            continue
+        if len(cur) >= 2:
+            blocks.append(cur)
+        cur = []
+    if len(cur) >= 2:
+        blocks.append(cur)
+    return blocks
+
+
+def _has_nieun_batchim(ch: str) -> bool:
+    code = ord(ch) - 0xAC00
+    return 0 <= code < 11172 and code % 28 == 4
 
 
 def self_honorifics(body: str):
     found = []
     for m in SELF_SUBJ.finditer(body):
-        words = body[m.end():].split(maxsplit=3)[:2]
-        for w in words:
-            w = w.rstrip(".,!?")
+        words = body[m.end():].split(maxsplit=5)[:4]
+        for raw in words:
+            w = raw.rstrip(".,!?")
+            if OTHER_SUBJ.search(w):
+                break
             if HON_FORM.search(w):
                 found.append(m.group(0).strip() + " " + w)
                 break
-            if CLAUSE_END.search(w) or re.search(r"[.?!]$", w):
+            if CLAUSE_END.search(w) or re.search(r"[.?!]$", raw):
+                break
+            # 관형형(ㄴ 받침, -던)이면 거기서 명사구가 시작되므로 멈춘다. 부정의 "안"은 뺀다.
+            if w != "안" and w and (_has_nieun_batchim(w[-1]) or w.endswith("던")):
                 break
     return found
 
@@ -426,9 +487,16 @@ def check(text: str) -> dict:
 
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
     bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())]
+    # 서식 칸 목록(- **일시**: 12월 3일)은 웹 공지의 관례라 볼드 라벨로 세지 않고,
+    # 볼드 총량에는 덩어리 하나를 1건으로 넣는다.
+    fields = field_blocks(lines)
+    field_lines = {i for block in fields for i in block}
+    bold_all = (bold_all[:len(bold_all) - sum(len(re.findall(r"\*\*[^*\n]+\*\*", lines[i]))
+                                              for i in field_lines)]
+                + ["(서식 칸 목록)"] * len(fields))
     # 볼드만 있는 독립 줄은 헤딩 구실을 하므로 문단을 여는 볼드로 세지 않는다. 총량 상한은 그대로 묶인다.
     # 라벨 볼드는 따로 세고 줄머리 볼드에서는 뺀다. 한 줄이 두 항목에 겹쳐 걸리지 않게 한다.
-    bold_label = [l for l in lines if BOLD_LABEL.match(l)]
+    bold_label = [l for i, l in enumerate(lines) if BOLD_LABEL.match(l) and i not in field_lines]
     bold_lead = [l for l in lines if re.match(r"^\s*\*\*", l)
                  and not re.match(r"^\s*\*\*[^*\n]+\*\*\s*$", l)
                  and not BOLD_LABEL.match(l)]
@@ -482,6 +550,9 @@ def check(text: str) -> dict:
     followup = FOLLOWUP.findall(body) + [s for s in sents[-2:] if CLOSING_OFFER.search(s)]
     opener = [s for s in sents[:2] if OPENER.search(s)]
     recommend = RECOMMEND.findall(body)
+    inanimate_pl = INANIMATE_PLURAL.findall(body)
+    succ = SUCCESSFULLY.findall(body)
+    more_many = MORE_MANY.findall(body)
 
     violations = []
 
@@ -558,6 +629,9 @@ def check(text: str) -> dict:
         " / ".join(f[-24:] for f in followup[:2]))
     add("첫머리 예고 (설명해 드릴게요)", opener, 0, " / ".join(o[:24] for o in opener[:2]))
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
+    add("무생물 복수 (단계들, 방법들)", inanimate_pl, 1, " / ".join(inanimate_pl[:3]))
+    add("성공적으로 ~되었습니다", succ, 0, " / ".join(succ[:2]))
+    add("더 많은 X 되풀이", more_many, 1)
     add("띄어쓰기 (할수있다, 하고있다)", spacing, 0, " / ".join(s.strip() for s in spacing[:4]))
 
     return {
@@ -604,6 +678,9 @@ def check(text: str) -> dict:
             "spacing": len(spacing),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
+            "inanimate_plural": len(inanimate_pl),
+            "successfully": len(succ),
+            "more_many": len(more_many),
             "opener_preview": len(opener),
             "checked_chars": len(body),
         },
