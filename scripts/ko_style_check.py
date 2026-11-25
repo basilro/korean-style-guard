@@ -139,6 +139,9 @@ CLOSING_OFFER = re.compile(
     r"|(?:필요하시면|필요하면|원하시면|원하면)[^.!?]{0,40}(?:만들어|정리해|작성해|바꿔|준비해)\s?드릴\s?수\s?있"
 )
 
+# 받는 쪽(부서, 담당자, 연락처)을 밝힌 안내. 후속 제안에서 뺀다.
+ELSEWHERE = re.compile(r"[가-힣0-9)]\s?(?:에게|께|에|로|으로|한테)\s?(?:말씀|알려|질문|물어|문의|연락)")
+
 # successfully 직역. 완료 문구는 "저장되었습니다"로 충분하다. 사람 글 0건.
 SUCCESSFULLY = re.compile(r"성공적으로\s(?:[가-힣]+\s)?[가-힣]*(?:되었|됐|완료되|완료했)")
 
@@ -563,7 +566,11 @@ def check(text: str) -> dict:
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
     sents = prose_sentences(body)
-    followup = FOLLOWUP.findall(body) + [s for s in sents[-2:] if CLOSING_OFFER.search(s)]
+    # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
+    # 권유가 아니므로 뺀다(6회차 표본의 오탐).
+    followup = [m.group(0) for m in FOLLOWUP.finditer(body) if not ELSEWHERE.search(m.group(0))]
+    followup += [s for s in sents[-2:]
+                 if (m := CLOSING_OFFER.search(s)) and not ELSEWHERE.search(m.group(0))]
     # 인사말은 3항이 따로 막으므로 첫 두 문장을 고를 때 건너뛴다.
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
     opener = [s for s in head if OPENER.search(s)]
