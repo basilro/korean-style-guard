@@ -135,8 +135,32 @@ PARA_MARKER = re.compile(
 CLOSING_OFFER = re.compile(
     r"(?:필요하시면|필요하면|원하시면|원하면|더\s?알고\s?싶)[^.!?]{0,40}"
     r"(?:말씀해|알려|질문해|물어봐)\s?(?:주세요|주십시오|줘|주시면|주시기)"
-    r"|(?:공유해|보내|알려)\s?주시면[^.!?]{0,20}(?:도와|안내해|확인해|살펴)\s?드리"
+    r"|(?:공유해|보내|알려)\s?주시면[^.!?]{0,30}(?:도와|안내해|확인해|살펴|조정해|맞춰|다듬어|정리해)\s?드(?:리|릴)"
+    r"|(?:어려우시면|막막하시면|고민되시면|어려우면|막막하면)[^.!?]{0,40}(?:말씀해|알려|질문해|물어봐)\s?(?:주세요|주십시오|줘)"
     r"|(?:필요하시면|필요하면|원하시면|원하면)[^.!?]{0,40}(?:만들어|정리해|작성해|바꿔|준비해)\s?드릴\s?수\s?있"
+)
+
+# 4회차 검토의 상투 표현. 사람 글에서 모두 0건이었다. 기준 말뭉치가 논문이라 증거가 약하므로
+# 공감으로 여는 말은 처음 두 문장에서만 센다.
+# 어림 표지 겹침: "대략 30분 정도", "0.8%p 정도로 추정되며". 어림은 하나로 충분하다(29항, 32항).
+APPROX_STACK = re.compile(
+    r"정도로\s?(?:추정|예상)(?:되|됩|된|합|한)|대략(?:적으로)?\s?[0-9][^.!?\n]{0,25}?정도"
+)
+# "~하는 데 도움이 됩니다"의 되풀이.
+HELPS_WITH = re.compile(r"[는은]\s?데\s?(?:큰\s|많은\s)?도움이\s?(?:됩|되|돼|된)")
+# 고민을 자연스러운 일로 바꿔 읽는 공감 첫말.
+EMPATHY_OPEN = re.compile(
+    r"(?:것은|건|것도)\s?(?:아주|매우|충분히|지극히|정말|너무나)?\s?(?:자연스러운|당연한|흔한)\s?"
+    r"(?:일|반응|감정|고민)(?:입니다|이에요|이죠|이다|일)"
+)
+# 안심시키며 닫는 말과 고민을 칭찬으로 바꾸는 말.
+EMPATHY_CLOSE = re.compile(
+    r"(?:어떤|어느)\s?(?:선택|결정)을\s?(?:하시|하|내리시|내리)더라도|후회가\s?(?:적|없|덜)을\s?(?:것|거)"
+    r"|결정은\s?(?:결국\s)?(?:본인|당신|스스로)의\s?몫|(?:다는|라는)\s?(?:증거|뜻|의미)이기도\s?(?:합니다|해요|하다)"
+)
+# 빈 면책 문장.
+HOLLOW_DISCLAIMER = re.compile(
+    r"(?:일반적인|참고용)\s?정보(?:이며|이고|입니다|일\s?뿐)|개인(?:에\s?따라|마다)\s?(?:효과가|결과가|차이가)\s?(?:다를|있을)\s?수"
 )
 
 # 받는 쪽(부서, 담당자, 연락처)을 밝힌 안내. 후속 제안에서 뺀다.
@@ -313,6 +337,8 @@ OTHER_SUBJ = re.compile(r"(?:님|께서)(?:이|은|는|께서|께|의|도)?$")
 HON_FORM = re.compile(r"(?:시겠|셨|십니|세요|셔요|셔서|시고|시는|신다|실\b)")
 CLAUSE_END = re.compile(r"(?:면|고|서|니까|는데|은데|지만|도록|려고|러|며|게|든지)[,]?$")
 
+
+QUOTE_ONLY = re.compile(r"^[\"“'‘「『][^\"”'’」』]+[\"”'’」』][.!?]?$")
 
 FIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*([^*\n]{1,12}?)(?:\*\*\s*[:：]|[:：]\s*\*\*)\s*(\S[^\n]*)$")
 SENTENCE_VALUE = re.compile(r"[.!?]\s*$|(?:다|요|죠)\s*$|(?:다|요)[.!?]")
@@ -505,14 +531,16 @@ def check(text: str) -> dict:
     dash = re.findall(r"—|–|(?<= )--(?= )", body)
 
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
-    bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())]
+    # 인용만 감싼 볼드(**"열심히 하겠습니다."**)는 완결 문장 볼드로 세지 않는다. 총량에는 든다.
+    bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())
+                     and not QUOTE_ONLY.match(b.strip())]
     # 서식 칸 목록(- **일시**: 12월 3일)은 웹 공지의 관례라 볼드 라벨로 세지 않고,
     # 볼드 총량에는 덩어리 하나를 1건으로 넣는다.
     fields = field_blocks(lines)
     field_lines = {i for block in fields for i in block}
     bold_all = (bold_all[:len(bold_all) - sum(len(re.findall(r"\*\*[^*\n]+\*\*", lines[i]))
                                               for i in field_lines)]
-                + ["(서식 칸 목록)"] * len(fields))
+                + ["(서식 칸 목록)"] * min(1, len(fields)))
     # 볼드만 있는 독립 줄은 헤딩 구실을 하므로 문단을 여는 볼드로 세지 않는다. 총량 상한은 그대로 묶인다.
     # 라벨 볼드는 따로 세고 줄머리 볼드에서는 뺀다. 한 줄이 두 항목에 겹쳐 걸리지 않게 한다.
     bold_label = [l for i, l in enumerate(lines) if BOLD_LABEL.match(l) and i not in field_lines]
@@ -575,6 +603,10 @@ def check(text: str) -> dict:
     head = [s for s in sents if not re.match(r"안녕하세요", s)][:2]
     opener = [s for s in head if OPENER.search(s)]
     sentiment = [s for s in sents[-2:] if CLOSING_SENTIMENT.search(s)]
+    approx = APPROX_STACK.findall(body)
+    helps = HELPS_WITH.findall(body)
+    empathy = ([s for s in head if EMPATHY_OPEN.search(s)] + EMPATHY_CLOSE.findall(body))
+    disclaimer = HOLLOW_DISCLAIMER.findall(body)
     paras = prose_paragraphs(body)
     led = [p for p in paras if PARA_MARKER.match(p)]
     para_frame = led if len(paras) >= 4 and len(led) >= 3 and len(led) / len(paras) >= 0.6 else []
@@ -607,7 +639,9 @@ def check(text: str) -> dict:
     add("서술어 없이 끝난 문장", unfinished, 2,
         " / ".join(u[-26:] for u in unfinished[:3]))
     add("부정 대구 (A가 아니라 B)", contrast, 1)
-    add("연결어미 뒤 쉼표", comma_after, 5,
+    # 사람 글은 1,000자당 약 1건이었다. 긴 글은 그 두 배(500자당 1건)까지 허용한다.
+    # 고정 상한 5 로는 7회차의 2,500자 안팎 문서 여섯 편 중 다섯이 걸렸다.
+    add("연결어미 뒤 쉼표", comma_after, max(5, len(body) // 500),
         " / ".join(w + "," for w in comma_after[:4]))
     add("콜론 부제 헤딩 (X: Y)", colon_heads, 1,
         " / ".join(h.strip()[:30] for h in colon_heads[:3]))
@@ -658,6 +692,11 @@ def check(text: str) -> dict:
         " / ".join(f[-24:] for f in followup[:2]))
     add("첫머리 예고 (설명해 드릴게요)", opener, 0, " / ".join(o[:24] for o in opener[:2]))
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
+    add("어림 표지 겹침 (대략 ~ 정도)", approx, 1, " / ".join(approx[:2]))
+    add("~하는 데 도움이 됩니다 되풀이", helps, 1)
+    add("공감·안심 상투 (자연스러운 일입니다)", empathy, 0,
+        " / ".join(e[-20:] for e in empathy[:2]))
+    add("빈 면책 (일반적인 정보이며)", disclaimer, 1)
     add("감상형 결말 (어떨까요, 가치가 있는)", sentiment, 0, " / ".join(s[-24:] for s in sentiment))
     add("문단 머리 접속 부사 틀", para_frame, 0, " / ".join(p[:6] for p in para_frame[:4]))
     add("무생물 복수 (단계들, 방법들)", inanimate_pl, 1, " / ".join(inanimate_pl[:3]))
@@ -711,6 +750,10 @@ def check(text: str) -> dict:
             "recommend_tail": len(recommend),
             "inanimate_plural": len(inanimate_pl),
             "closing_sentiment": len(sentiment),
+            "approx_stack": len(approx),
+            "helps_with": len(helps),
+            "empathy_cliche": len(empathy),
+            "hollow_disclaimer": len(disclaimer),
             "paragraph_marker_frame": len(para_frame),
             "successfully": len(succ),
             "more_many": len(more_many),

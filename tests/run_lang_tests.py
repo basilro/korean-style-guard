@@ -44,10 +44,11 @@ CASES = [
      "오류는 다음과 같습니다.\n\n> TypeError: Cannot read properties of undefined "
      "(reading 'map') at render in the component tree when the list is empty\n\n"
      "목록이 비어 있을 때 map을 부르기 전에 확인하면 됩니다.", False),
-    ("table_english_ok", KO_Q,
+    # 설명 칸이 영어 문장인 표는 영어 답변이다. 1.11.0 처음에는 표를 통째로 가려 통과시켰다.
+    ("table_english_descriptions", KO_Q,
      "| Option | Description |\n|---|---|\n| --force | Overwrite the existing file "
      "without asking for confirmation first |\n| --dry-run | Print what would happen "
-     "without changing anything on disk |\n\n두 옵션 가운데 --dry-run 을 먼저 쓰세요.", False),
+     "without changing anything on disk |\n\n두 옵션 가운데 --dry-run 을 먼저 쓰세요.", True),
     ("mixed_mostly_english", KO_Q,
      "요약: The root cause is that the cache key ignores the locale, so every user "
      "after the first one receives the same rendered page regardless of their language "
@@ -70,6 +71,15 @@ CASES = [
     ("translate_to_korean_english_answer", "이 문단을 한국어로 번역해 줘.", EN_A, True),
     ("translate_to_english_with_korean_note_ok",
      "이 문장을 영어로 번역해 줘. 설명은 한국어로 해 줘.", EN_A, False),
+    ("english_table_answer", KO_Q,
+     "| Method | Description | Idempotent |\n|---|---|---|\n"
+     "| GET | Retrieve a resource from the server | Yes |\n"
+     "| POST | Create a new resource on the server | No |\n"
+     "| PUT | Replace the whole resource with the payload | Yes |\n\n"
+     "표를 참고하세요.", True),
+    ("korean_table_ok", KO_Q,
+     "| 지역 | 주요 업체 | 강점 |\n|---|---|---|\n| 중국 | CATL, BYD | 가격 경쟁력과 LFP 기술 우위 |\n"
+     "| 한국 | LG, SK On | 고에너지 밀도 삼원계 |\n\n표처럼 지역마다 강점이 다릅니다.", False),
     ("polish_english_email_ok", "이 영어 이메일 다듬어줘\n\nHi team, I want to share update.", EN_A, False),
 ]
 
