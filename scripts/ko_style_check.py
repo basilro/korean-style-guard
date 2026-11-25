@@ -201,6 +201,9 @@ HOLLOW_DISCLAIMER = re.compile(
     r"(?:일반적인|참고용)\s?정보(?:이며|이고|입니다|일\s?뿐)|개인(?:에\s?따라|마다)\s?(?:효과가|결과가|차이가)\s?(?:다를|있을)\s?수"
 )
 
+# 메일 본문의 헤딩(2항). "운영팀 드림", "홍길동 올림" 같은 서명 줄이 있는 글에서만 헤딩을 센다(18회차).
+MAIL_SIGN = re.compile(r"^[^\n#*]{1,20}\s(?:드림|올림)\s*$", re.M)
+
 # 받는 쪽(부서, 담당자, 연락처)을 밝힌 안내. 후속 제안에서 뺀다.
 ELSEWHERE = re.compile(r"[가-힣0-9)]\s?(?:에게|께|에|로|으로|한테)\s?(?:말씀|알려|질문|물어|문의|연락)")
 
@@ -668,6 +671,7 @@ def check(text: str) -> dict:
     particle_swap = PARTICLE_SWAP.findall(body)
     spacing = SPACING.findall(body)
     starved = ["쉼표 0"] if comma_starved(body) else []
+    mail_heads = heads if MAIL_SIGN.search(body) else []
     sents = prose_sentences(body)
     # "정보보안팀(내선 4410)에 알려 주십시오"처럼 받는 쪽을 밝힌 안내는 답변자에게 되묻게 하는
     # 권유가 아니므로 뺀다(6회차 표본의 오탐).
@@ -759,6 +763,7 @@ def check(text: str) -> dict:
     add("강조 부사 (매우, 정말, 굉장히)", intens, max(2, len(body) // 1000),
         " / ".join(intens[:5]))
     add("쉼표 없는 긴 산문 (끊어 읽을 자리에 하나 두기)", starved, 0)
+    add("메일 본문의 헤딩", mail_heads, 0, " / ".join(h.strip()[:24] for h in mail_heads[:2]))
     add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
     # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
     add("헤지 겹쓰기 (~할 수 있을 것이다)", hedge, 1, " / ".join(h.strip() for h in hedge[:3]))
@@ -826,6 +831,7 @@ def check(text: str) -> dict:
             "particle_swap": len(particle_swap),
             "spacing": len(spacing),
             "comma_starved": len(starved),
+            "mail_headings": len(mail_heads),
             "followup_offer": len(followup),
             "recommend_tail": len(recommend),
             "inanimate_plural": len(inanimate_pl),
