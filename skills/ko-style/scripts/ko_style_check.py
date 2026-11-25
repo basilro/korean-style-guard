@@ -36,7 +36,10 @@ EMOJI = re.compile(
 
 # 본문 산문에서 서술어 없이 끝난 문장을 센다.
 # 헤딩과 목록과 표는 대상이 아니다. 한국어에서 제목과 목차는 명사구가 표준이다.
-CLOSERS = "다요까죠오네군"
+# 해체(반말) 종결도 완결 문장이다. 반말로 물은 사용자에게 반말로 답하면 "많아.", "줄게.", "거야."로 끝난다.
+# 10회차 표본에서 해체 답변 한 편이 18건으로 걸렸다. "-는데", "-고"처럼 연결어미로 끝난 것은
+# 아래 CONNECTIVES 가 먼저 잡는다.
+CLOSERS = "다요까죠오네군" + "어아야지게해돼봐줘와워래니냐자걸데라"
 CONNECTIVES = ("하고", "이고", "으며", "하며", "인데", "는데", "지만", "아서",
                "어서", "하여", "이며", "면서", "거나", "이나")
 
@@ -350,7 +353,8 @@ CLAUSE_END = re.compile(r"(?:면|고|서|니|니까|테니|므로|는데|은데|
 
 QUOTE_ONLY = re.compile(r"^[\"“'‘「『][^\"”'’」』]+[\"”'’」』][.!?]?$")
 
-FIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*([^*\n]{1,12}?)(?:\*\*\s*[:：]|[:：]\s*\*\*)\s*(\S[^\n]*)$")
+# 라벨은 원어 병기(아티팩트(artifact))까지 20자를 받는다.
+FIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*([^*\n]{1,20}?)(?:\*\*\s*[:：]|[:：]\s*\*\*)\s*(\S[^\n]*)$")
 SENTENCE_VALUE = re.compile(r"[.!?]\s*$|(?:다|요|죠)\s*$|(?:다|요)[.!?]")
 
 
@@ -359,7 +363,9 @@ def field_blocks(lines):
     blocks, cur = [], []
     for i, line in enumerate(lines):
         m = FIELD.match(line)
-        if m and len(m.group(2)) <= 40 and not SENTENCE_VALUE.search(m.group(2)):
+        # 용어 사전의 정의(- **빌드**: 소스 코드를 실행 가능한 결과물로 바꾸는 과정)는 40자를 넘기도 한다.
+        # 문장으로 끝나지 않으면 80자까지 서식 칸으로 본다(10회차).
+        if m and len(m.group(2)) <= 80 and not SENTENCE_VALUE.search(m.group(2)):
             cur.append(i)
             continue
         if len(cur) >= 2:
@@ -520,7 +526,9 @@ def unfinished_sentences(body: str):
         prose.append(t)
 
     bad = []
-    for raw in re.split(r"(?<=[.!?])\s+", " ".join(prose)):
+    # 큰따옴표 안의 대사와 인용은 저자의 서술이 아니므로 뺀다(10회차 소설 발췌).
+    joined = re.sub(r"\"[^\"\n]*\"|“[^”\n]*”", " ", " ".join(prose))
+    for raw in re.split(r"(?<=[.!?])\s+", joined):
         sent = raw.strip()
         if len(sent) < 12 or not re.search(r"[가-힣]", sent):
             continue
@@ -542,8 +550,10 @@ def check(text: str) -> dict:
 
     bold_all = re.findall(r"\*\*([^*\n]+)\*\*", body)
     # 인용만 감싼 볼드(**"열심히 하겠습니다."**)는 완결 문장 볼드로 세지 않는다. 총량에는 든다.
+    # 문답 형식의 질문 줄(**Q. 왜 빵이었나요?**)도 관례라 세지 않는다(10회차 인터뷰).
     bold_sentence = [b for b in bold_all if re.search(r"(다|요)\.$|[.!?]$", b.strip())
-                     and not QUOTE_ONLY.match(b.strip())]
+                     and not QUOTE_ONLY.match(b.strip())
+                     and not re.match(r"^(?:Q|A|질문|답)\s?\d*\s?[.:)]", b.strip())]
     # 서식 칸 목록(- **일시**: 12월 3일)은 웹 공지의 관례라 볼드 라벨로 세지 않고,
     # 볼드 총량에는 덩어리 하나를 1건으로 넣는다.
     fields = field_blocks(lines)
