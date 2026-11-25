@@ -60,6 +60,17 @@ CASES = [
      "<system-reminder>The following is English boilerplate injected by tooling that the "
      "user never typed and should be ignored entirely.</system-reminder>배포 스크립트 고쳐줘",
      EN_A, True),
+    # 3회차 표본에서 찾은 빈틈
+    ("pasted_log_prompt",
+     "Traceback (most recent call last):\n  File \"/app/db.py\", line 42, in connect\n"
+     "    engine = create_engine(url, pool_pre_ping=True)\n"
+     "sqlalchemy.exc.OperationalError: could not connect to server: Connection refused\n"
+     "\tIs the server running on host \"localhost\" and accepting TCP/IP connections on port 5432?\n"
+     "이거 왜 이래?", EN_A, True),
+    ("translate_to_korean_english_answer", "이 문단을 한국어로 번역해 줘.", EN_A, True),
+    ("translate_to_english_with_korean_note_ok",
+     "이 문장을 영어로 번역해 줘. 설명은 한국어로 해 줘.", EN_A, False),
+    ("polish_english_email_ok", "이 영어 이메일 다듬어줘\n\nHi team, I want to share update.", EN_A, False),
 ]
 
 

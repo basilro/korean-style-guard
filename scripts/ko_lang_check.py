@@ -31,6 +31,9 @@ WANTS_ENGLISH = re.compile(
     re.I,
 )
 
+TO_KOREAN = re.compile(r"한국어로|한글로|우리말로|국문으로|국역|한역|into korean|to korean", re.I)
+EXPLICIT_ENGLISH = re.compile(r"영어로|영문으로|영역|in english|into english|to english", re.I)
+
 # 사람이 쓰지 않은 부분. 훅이 붙이는 꼬리표와 명령 출력이 사용자 입력에 섞여 온다.
 PROMPT_NOISE = [
     r"<system-reminder>.*?</system-reminder>",
@@ -103,10 +106,24 @@ def clean_prompt(text: str) -> str:
 
 
 def is_korean_prompt(prompt: str) -> bool:
-    ko, en = word_counts(clean_prompt(prompt))
+    """한글이 든 줄만 모아 비율을 센다.
+
+    코드 블록 없이 붙여 넣은 영어 로그나 스택 트레이스가 길면 질문 전체로는 영어가 많아진다.
+    사람이 친 질문은 한글이 든 줄에 있으므로 그 줄만 본다.
+    """
+    lines = [l for l in clean_prompt(prompt).split("\n") if HANGUL.search(l)]
+    ko, en = word_counts("\n".join(lines))
     if ko == 0:
         return False
     return ko / (ko + en) >= KO_PROMPT_RATIO
+
+
+def wants_english(prompt: str) -> bool:
+    """영어 출력을 청했는가. "한국어로 번역해 줘"처럼 번역 방향이 한국어면 청하지 않은 것이다."""
+    p = clean_prompt(prompt)
+    if not WANTS_ENGLISH.search(p):
+        return False
+    return not (TO_KOREAN.search(p) and not EXPLICIT_ENGLISH.search(p))
 
 
 def judge(prompt: str, answer: str) -> dict:
@@ -118,7 +135,7 @@ def judge(prompt: str, answer: str) -> dict:
     if not is_korean_prompt(prompt):
         result["reason"] = "prompt_not_korean"
         return result
-    if WANTS_ENGLISH.search(clean_prompt(prompt)):
+    if wants_english(prompt):
         result["reason"] = "english_requested"
         return result
 
