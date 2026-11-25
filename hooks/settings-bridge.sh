@@ -15,4 +15,6 @@ ROOT=$(find "$HOME/.claude/plugins/cache/korean-style-guard" \
 
 HOOK="$ROOT/scripts/stop_hook.py"
 [ -r "$HOOK" ] || exit 0
-exec python3 "$HOOK"
+. "$ROOT/hooks/find-python.sh" 2>/dev/null || PY=(python3)
+[ ${#PY[@]} -gt 0 ] || exit 0
+exec "${PY[@]}" "$HOOK"

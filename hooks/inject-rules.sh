@@ -11,7 +11,9 @@ RULES="$ROOT/rules/ko-style-rules.md"
 
 [ -r "$RULES" ] || exit 0
 
-python3 - "$RULES" <<'PY'
+. "$ROOT/hooks/find-python.sh" 2>/dev/null || PY=(python3)
+[ ${#PY[@]} -gt 0 ] || exit 0
+"${PY[@]}" - "$RULES" <<'PY'
 import json, sys
 body = open(sys.argv[1], encoding="utf-8").read()
 print(json.dumps({

@@ -1,0 +1,1 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Why does this function return None? It lives in utils/parse.py."}]}}

@@ -8,6 +8,9 @@
                 입력에 turn_id 가 있으면 Codex 로 판정한다.
 
 두 경우 모두 reason 이 다음 지시로 전달되어 답변을 고쳐서 다시 내게 만든다.
+
+검사는 두 단계다. 먼저 한국어 질문에 영어로 답했는지 보고(ko_lang_check),
+다음으로 한국어 답변이 보칙을 지켰는지 센다(ko_style_check).
 """
 import json
 import os
@@ -16,6 +19,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ko_style_check import check, format_report  # noqa: E402
+from ko_lang_check import REASON as LANG_REASON  # noqa: E402
+from ko_lang_check import judge, prompt_from_payload  # noqa: E402
 
 HANGUL = re.compile(r"[가-힣]")
 
@@ -50,6 +55,14 @@ def main() -> int:
 
     message = payload.get("last_assistant_message") or ""
 
+    # 한국어로 물었는데 영어로 답했으면 한국어로 다시 쓰게 한다.
+    # 영어 답변에는 한글이 없어 아래 보칙 검사를 그냥 지나가므로 먼저 본다.
+    # KO_STYLE_SKIP_LANG=1 이면 건너뛴다.
+    if message and os.environ.get("KO_STYLE_SKIP_LANG") != "1":
+        verdict = judge(prompt_from_payload(payload), message)
+        if verdict["flagged"]:
+            return emit(LANG_REASON, is_codex)
+
     # 한글이 없으면 한국어 답변이 아니므로 검사하지 않는다.
     if not HANGUL.search(message):
         return 0
@@ -58,12 +71,13 @@ def main() -> int:
     if result["passed"]:
         return 0
 
-    reason = build_reason(result)
+    return emit(build_reason(result), is_codex)
 
+
+def emit(reason: str, is_codex: bool) -> int:
     if is_codex:
         print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
         return 0
-
     print(reason, file=sys.stderr)
     return 2
 

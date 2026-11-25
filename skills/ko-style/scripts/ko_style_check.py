@@ -186,6 +186,103 @@ INTENSIFIER = re.compile(
 )
 
 
+# 여기부터는 이 저장소가 읽은 국어학 논문의 기준이다(1.11.0).
+
+# 일본어 이중부정 직역. 金恩愛(2009)의 なければならない 번역례 470개 중 76.6%가 긍정형이었고,
+# 오경순(2007)은 "~하지 않으면 안 된다"를 직역투로, "~해야 한다"를 간결한 형태로 보았다.
+DOUBLE_NEG = re.compile(r"지\s?않으면\s?안\s?(?:된|돼|됩|되|될)")
+
+# 헤지 겹쓰기. 강수진·이미혜(2019)는 헤지 1,369회 중 "-ㄹ 수 있다"가 79.4%였고,
+# 하나로 족한 자리에 둘을 겹친 것("알 수 있을 것이다")을 과잉 사용으로 분류했다.
+# "될 수 있을 것 같다"는 구어의 자연스러운 추측이라 "것 같"은 뺀다.
+HEDGE_STACK = re.compile(
+    r"수\s?있을\s?(?:것(?:이다|입니다|이라|으로|이며|이고)|듯(?:하|합|싶))"
+    r"|것으로\s?(?:보일|생각될|판단될|여겨질)\s?수\s?있"
+    r"|(?:보인다|생각된다|판단된다)고\s?(?:할|볼)\s?수\s?있"
+)
+
+# 사물 주어의 -시-. Yoon(2017)의 모어 화자 70명 평정에서 사물을 높인 문장은 평균 1.62점(5점 척도),
+# 사람의 신체와 소유를 높인 문장은 3.34점이었다. 국립국어원은 "나오셨습니다"류를 오용으로 본다.
+# 사람과 이어지는 명사(주문, 말씀, 댁, 건강)는 정도의 문제라 넣지 않는다.
+THING_NOUNS = ("결과|오류|에러|파일|함수|코드|설정|화면|메뉴|제품|상품|커피|음료|서버|문서|링크"
+               "|메시지|버전|업데이트|배송|택배|요금|가격|비용|프로그램|앱|기능|빌드|테스트|로그"
+               "|데이터|값|창|버튼|페이지|사이트|계정|비밀번호|설치|작업|명령|응답|요청|이메일|메일")
+HON_THING = re.compile(
+    rf"(?<![가-힣])(?:{THING_NOUNS})(?:이|가)\s(?:[가-힣]+\s)?"
+    r"(?:나오|되|있으|없으|발생하|뜨|들어가|도착하|걸리|완료되|준비되|적용되|열리|닫히|끝나|바뀌)"
+    r"(?:세요|셨|십니|시는|시면|실|신)"
+)
+
+# 자기 쪽의 -시-. Yoon(2017)에서 "저희 매장은 세일 안 들어가세요"류는 평균 1.61점이었다.
+# 같은 절 안에서만 본다. 연결어미에서 절이 끝나면 뒤의 -시-는 청자의 일이다.
+SELF_SUBJ = re.compile(r"(?<![가-힣])(?:제가|저는|저희가|저희는|저도|저희도)\s")
+HON_FORM = re.compile(r"(?:시겠|셨|십니|세요|셔요|셔서|시고|시는|신다|실\b)")
+CLAUSE_END = re.compile(r"(?:면|고|서|니까|는데|은데|지만|도록|려고|러|며|게|든지)[,]?$")
+
+
+def self_honorifics(body: str):
+    found = []
+    for m in SELF_SUBJ.finditer(body):
+        words = body[m.end():].split(maxsplit=3)[:2]
+        for w in words:
+            w = w.rstrip(".,!?")
+            if HON_FORM.search(w):
+                found.append(m.group(0).strip() + " " + w)
+                break
+            if CLAUSE_END.search(w) or re.search(r"[.?!]$", w):
+                break
+    return found
+
+
+# 말투 혼용. Kim(2023)은 하십시오체와 해요체의 혼용은 격식 자리에서도 흔하지만
+# 하십시오체와 해체·해라체의 혼용은 관찰되지 않았다고 했다. 그래서 합니다·해요 계열과
+# 한다체가 한 답변의 본문에 함께 나올 때만 센다.
+ENDING_HON = re.compile(r"(?:니다|니까|시오|요|죠)[.?!]$")
+ENDING_PLAIN = re.compile(r"[가-힣](?<!니)다[.?!]$")
+
+
+def speech_level_mix(body: str):
+    """존대 문장과 한다체 문장이 섞인 본문에서 소수 쪽 문장을 돌려준다."""
+    hon, plain = [], []
+    for s in prose_sentences(body):
+        s = re.sub(r"[\"'“”‘’)]+$", "", s.strip())
+        if re.search(r"[\"“][^\"”]*$", s):
+            continue
+        if ENDING_HON.search(s):
+            hon.append(s)
+        elif ENDING_PLAIN.search(s):
+            plain.append(s)
+    if len(hon) >= 3 and len(plain) >= 2:
+        minority = plain if len(plain) <= len(hon) else hon
+        if len(minority) / (len(hon) + len(plain)) >= 0.15:
+            return minority
+    return []
+
+
+# 조사 대치. 장석배(2019)의 영어권 학습자 말뭉치에서 "영향, 도움, 관심" 앞에 "에" 대신
+# 목적격을 쓴 오류가 따로 분류됐다. 사이에 다른 어절이 없을 때만 잡는다.
+PARTICLE_SWAP = re.compile(
+    r"[가-힣][을를]\s(?:(?:큰|많은|깊은|좋은|나쁜|가장\s큰)\s)?영향을\s(?:주|줬|준|미치|미쳤|끼치)"
+    r"|[가-힣][을를]\s(?:큰\s|많은\s)?관심이\s(?:있|많|없)"
+)
+
+
+# 띄어쓰기. 주지연(2017)이 인용한 신호철 외(2015)의 오표기 빈도에서 1~3위가 모두 의존 명사
+# (제43항 단위, 제42항 체언·관형어 뒤)였다. 앞말의 품사로 갈리는 만큼, 대로, 뿐, 데, 지는
+# 표면형으로 판정할 수 없어 넣지 않는다. 여기 둔 것은 앞말이 정해진 꼴뿐이다.
+#   할수 있다, 할 수있다 (제42항)      하고있다, 하지않다, 하지못하다 (제47항)
+#   너때문에 (제42항)                  할 수 밖에 (제41항, 밖에는 조사)
+# 될수록, 할수록은 어미 -ㄹ수록이고 수많은, 수없이, 실수는 한 단어라 걸리지 않는다.
+SPACING = re.compile(
+    r"(?:(?<![가-힣])[할될볼갈올쓸알줄살]|[가-힣]을)수\s?(?:있|없(?!이))"
+    r"|(?<=[가-힣])\s수(?:있|없(?!이))"
+    r"|[가-힣]고있(?=[는다어었으지을습네])"
+    r"|[가-힣]지(?:않[는다아았을습으]|못하)"
+    r"|[가-힣]때문(?=에|이)"
+    r"|(?<=[가-힣])\s수\s밖에"
+)
+
+
 def ui_chains(body: str):
     """관형격 "의"가 세 어절 연달아 이어지는 곳을 찾는다(사용자의 설정의 값)."""
     found = []
@@ -326,6 +423,14 @@ def check(text: str) -> dict:
     pleonasm = PLEONASM.findall(body)
     intens = INTENSIFIER.findall(body)
 
+    double_neg = DOUBLE_NEG.findall(body)
+    hedge = HEDGE_STACK.findall(body)
+    hon_thing = HON_THING.findall(body)
+    hon_self = self_honorifics(body)
+    level_mix = speech_level_mix(body)
+    particle_swap = PARTICLE_SWAP.findall(body)
+    spacing = SPACING.findall(body)
+
     violations = []
 
     def add(label, items, limit, detail=""):
@@ -389,6 +494,15 @@ def check(text: str) -> dict:
     add("겹말 (미리 예약, 과반수 이상)", pleonasm, 0, " / ".join(pleonasm[:3]))
     add("강조 부사 (매우, 정말, 굉장히)", intens, max(2, len(body) // 1000),
         " / ".join(intens[:5]))
+    add("이중부정 (~하지 않으면 안 된다)", double_neg, 0)
+    # 사람이 쓴 학술 논문에도 한 편에 2~5회 나왔다. 0건을 요구하지 않고 되풀이만 잡는다.
+    add("헤지 겹쓰기 (~할 수 있을 것이다)", hedge, 1, " / ".join(h.strip() for h in hedge[:3]))
+    add("사물 존대 (결과가 나오셨습니다)", hon_thing, 0, " / ".join(hon_thing[:3]))
+    add("자기 높임 (제가 확인하시겠습니다)", hon_self, 0, " / ".join(hon_self[:3]))
+    add("말투 혼용 (합니다체와 한다체)", level_mix, 0,
+        " / ".join(s[-20:] for s in level_mix[:3]))
+    add("조사 대치 (X를 영향을 주다)", particle_swap, 0, " / ".join(particle_swap[:3]))
+    add("띄어쓰기 (할수있다, 하고있다)", spacing, 0, " / ".join(s.strip() for s in spacing[:4]))
 
     return {
         "violations": violations,
@@ -425,6 +539,13 @@ def check(text: str) -> dict:
             "calque_idiom": len(idiom),
             "pleonasm": len(pleonasm),
             "intensifier": len(intens),
+            "double_negation": len(double_neg),
+            "hedge_stack": len(hedge),
+            "honorific_thing": len(hon_thing),
+            "honorific_self": len(hon_self),
+            "speech_level_mix": len(level_mix),
+            "particle_swap": len(particle_swap),
+            "spacing": len(spacing),
             "checked_chars": len(body),
         },
     }
