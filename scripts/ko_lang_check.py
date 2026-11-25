@@ -25,14 +25,19 @@ KO_PROMPT_RATIO = 0.3
 HANGUL = re.compile(r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
 # 영어 답변을 사용자가 청한 경우. 이때 영어 답변은 정상이다.
+# 22회차 적대 시험에서 넓히고 좁혔다. "영어로 된 문서"는 문서를 설명하는 말이라 요청이 아니고,
+# "번역 품질 지표가 뭐야"의 "번역"도 요청이 아니다. "영문 메일 작성", "영어 답장", "English로"는 요청이다.
+EN_NOT_DESC = r"(?!\s?(?:된|쓰인|작성된|적힌))"
 WANTS_ENGLISH = re.compile(
-    r"영어로|영문으로|영어\s?(?:답변|버전|문장|원문|이메일|메일|요약)|영작|영역(?:해|하)"
-    r"|번역|옮겨\s?(?:줘|주세요|줄래)|translat|in english|english\s?(?:only|version|please)",
+    r"영어로" + EN_NOT_DESC + r"|영문으로|영어\s?(?:답변|답장|버전|문장|원문|이메일|메일|요약)"
+    r"|영문\s?(?:메일|이메일|이력서|자기소개서|편지|버전)|영작|영역(?:해|하)"
+    r"|번역\s?(?:해|하|좀|부탁)|옮겨\s?(?:줘|주세요|줄래)|translat|in english"
+    r"|english\s?(?:only|version|please|로|으로)",
     re.I,
 )
 
 TO_KOREAN = re.compile(r"한국어로|한글로|우리말로|국문으로|국역|한역|into korean|to korean", re.I)
-EXPLICIT_ENGLISH = re.compile(r"영어로|영문으로|영역|in english|into english|to english", re.I)
+EXPLICIT_ENGLISH = re.compile(r"영어로" + EN_NOT_DESC + r"|영문으로|영역|in english|into english|to english", re.I)
 
 # 사람이 쓰지 않은 부분. 훅이 붙이는 꼬리표와 명령 출력이 사용자 입력에 섞여 온다.
 PROMPT_NOISE = [
@@ -45,7 +50,11 @@ PROMPT_NOISE = [
 ]
 
 # 영어 글을 다듬어 달라는 요청. 질문에 영어 산문 줄이 붙어 있고 교정 동사가 있으면 영어 답변이 정상이다.
-EDIT_VERB = re.compile(r"다듬|고쳐|고치|교정|윤문|첨삭|손봐|proofread|polish|fix\s+(?:the\s+)?grammar", re.I)
+EDIT_VERB = re.compile(
+    r"다듬|고쳐|고치|교정|윤문|첨삭|손봐|자연스럽|수정해|proofread|polish|fix\s+(?:the\s+)?grammar", re.I
+)
+# 교정 대상이 글이어야 한다. "이 에러 어떻게 고쳐?"와 영어 오류 줄은 영어 글 교정 요청이 아니다.
+EDIT_TARGET = re.compile(r"영어|영문|문장|문단|글|메일|문법|표현|english", re.I)
 # 관례상 영어로 쓰는 경우가 많은 산출물. 프로젝트마다 다르므로 판정하지 않는 쪽으로 둔다.
 # 산출물을 "써 달라"는 요청일 때만 본다. "이 README 요약해 줘"에 영어로 답하면 막아야 한다.
 ENGLISH_ARTIFACT = re.compile(
@@ -63,7 +72,10 @@ MASKS = [
     # 줄 단위 마스크는 줄을 넘지 않게 [^\n] 으로 쓴다. re.S 로 돌리기 때문이다.
     r"(?m)^ {4,}\S[^\n]*$",
     r"(?m)^\t+\S[^\n]*$",
-    r"(?m)^[ \t]*>[^\n]*$",
+    # 인용은 '>' 없이 이어지는 줄(lazy continuation)까지 빈 줄 전까지 가린다.
+    r"(?m)^[ \t]*>[^\n]*(?:\n(?![ \t]*\n)[^\n]*)*",
+    # 코드 블록 없이 붙인 로그 줄(npm ERR!, ERROR, Traceback, at foo.bar ()).
+    r"(?m)^[ \t]*(?:npm ERR!|(?:ERROR|WARN(?:ING)?|INFO|DEBUG|FATAL)\b|Traceback \(|at [\w.$<>]+ \()[^\n]*$",
     # 표는 구분 줄만 가린다. 칸이 모두 영어 문장인 표도 영어 답변이다(4회차 검토).
     r"(?m)^[ \t]*\|[ \t:|-]+\|[ \t]*$",
     r"(?m)^[ \t]*\$ [^\n]*$",
@@ -106,8 +118,13 @@ def word_counts(text: str):
     return ko, en
 
 
+# 머리줄에 한글이 있는 표는 한국어 답변의 표라 통째로 가린다. 영어 칸이 섞여도 사용자를 위한 정리다.
+# 머리줄까지 영어인 표는 그대로 두어 영어 답변으로 셀 수 있게 한다(22회차).
+KO_TABLE = re.compile(r"(?m)^[ \t]*\|[^\n]*[가-힣][^\n]*\|[ \t]*\n[ \t]*\|[ \t:|-]+\|[ \t]*(?:\n[ \t]*\|[^\n]*)*")
+
+
 def mask(text: str) -> str:
-    out = text
+    out = KO_TABLE.sub(" ", text)
     for pat in MASKS:
         out = re.sub(pat, " ", out, flags=re.S)
     return out
@@ -126,19 +143,24 @@ def is_korean_prompt(prompt: str) -> bool:
     코드 블록 없이 붙여 넣은 영어 로그나 스택 트레이스가 길면 질문 전체로는 영어가 많아진다.
     사람이 친 질문은 한글이 든 줄에 있으므로 그 줄만 본다.
     """
-    lines = [l for l in clean_prompt(prompt).split("\n") if HANGUL.search(l)]
-    ko, en = word_counts("\n".join(lines))
-    if ko == 0:
+    ko, en = word_counts(korean_lines(prompt))
+    # "What is 눈치?"처럼 한글 단어가 하나뿐인 영어 질문은 한국어 질문으로 보지 않는다.
+    if ko == 0 or (ko == 1 and en >= 2):
         return False
     return ko / (ko + en) >= KO_PROMPT_RATIO
 
 
+def korean_lines(prompt: str) -> str:
+    """사람이 친 한글 줄만 모은다. 붙여 넣은 영어 문서 안의 낱말(translation)에 속지 않으려는 것이다."""
+    return "\n".join(l for l in clean_prompt(prompt).split("\n") if HANGUL.search(l))
+
+
 def wants_english(prompt: str) -> bool:
     """영어 출력을 청했는가. "한국어로 번역해 줘"처럼 번역 방향이 한국어면 청하지 않은 것이다."""
-    p = clean_prompt(prompt)
+    p = korean_lines(prompt)
     if ENGLISH_ARTIFACT.search(p):
         return True
-    if EDIT_VERB.search(p) and EN_PROSE_LINE.search(prompt):
+    if EDIT_VERB.search(p) and EDIT_TARGET.search(p) and EN_PROSE_LINE.search(prompt):
         return True
     if not WANTS_ENGLISH.search(p):
         return False

@@ -14,7 +14,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SUITES = ["run_prose_tests.py", "run_lang_tests.py", "run_identifier_tests.py"]
+SUITES = ["run_prose_tests.py", "run_lang_tests.py", "run_lang_adversarial.py", "run_identifier_tests.py"]
 DOCS = ["README.md", "rules/ko-style-rules.md", "skills/ko-style/SKILL.md",
         "output-styles/korean-style.md", "commands/ko-check.md"]
 
