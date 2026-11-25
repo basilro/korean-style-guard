@@ -56,6 +56,38 @@ def check_manifest():
     return []
 
 
+# 논문 근거 항목(31~36항)의 이름. 표본 시험에서 이 항목만 본다.
+PAPER_ITEMS = ("이중부정", "헤지 겹쓰기", "사물 존대", "자기 높임", "말투 혼용", "조사 대치", "띄어쓰기")
+# bad 표본에 넣은 오류 가운데 계수기가 잡아야 하는 항목. 헤지는 상한 1이라 한 번 나온 bad03 은 걸리지 않는다.
+BAD_EXPECT = {
+    "bad01.md": {"사물 존대", "자기 높임"},
+    "bad02.md": {"사물 존대", "이중부정"},
+    "bad03.md": {"조사 대치", "띄어쓰기"},
+    "bad04.md": {"사물 존대", "자기 높임", "띄어쓰기"},
+}
+
+
+def check_samples():
+    """tests/samples 의 실제 문장 표본으로 논문 근거 항목을 본다(9회차).
+
+    ok 표본은 할수록, 수밖에, 파일이 있으시면, 제가 확인할 테니처럼 헷갈리는 정상 꼴을 많이 담았다.
+    여기서 논문 근거 항목이 하나라도 나오면 오탐이다. bad 표본은 넣은 오류가 잡혀야 한다.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    from ko_style_check import check
+    bad = []
+    folder = os.path.join(HERE, "samples")
+    for name in sorted(os.listdir(folder)):
+        with open(os.path.join(folder, name), encoding="utf-8") as fh:
+            got = {v["name"].split(" (")[0] for v in check(fh.read())["violations"]}
+        got &= set(PAPER_ITEMS)
+        if name.startswith("ok") and got:
+            bad.append(f"{name}: 오탐 {sorted(got)}")
+        if name in BAD_EXPECT and not BAD_EXPECT[name] <= got:
+            bad.append(f"{name}: 놓침 {sorted(BAD_EXPECT[name] - got)}")
+    return bad
+
+
 def check_speed():
     """공백 없는 긴 입력에서 이차 시간이 드는 정규식이 다시 들어오지 않았는지 본다.
 
@@ -91,7 +123,8 @@ def main():
             print(r.stdout)
             print(r.stderr)
     for label, fn in (("사본 일치", check_sync), ("문서 자기 검사", check_docs),
-                      ("매니페스트", check_manifest), ("성능", check_speed)):
+                      ("매니페스트", check_manifest), ("실제 문장 표본", check_samples),
+                      ("성능", check_speed)):
         bad = fn()
         print(f"{label}: {'통과' if not bad else '실패'}")
         for b in bad:
