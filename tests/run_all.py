@@ -91,6 +91,14 @@ def check_samples():
     for name in sorted(os.listdir(folder)):
         with open(os.path.join(folder, name), encoding="utf-8") as fh:
             got = {v["name"].split(" (")[0] for v in check(fh.read())["violations"]}
+        with open(os.path.join(folder, name), encoding="utf-8") as fh:
+            result = check(fh.read())
+        # human 표본(19·20회차의 사람 투 글)은 어떤 항목에도 걸리면 안 되고,
+        # default 표본(기본 AI 말투)은 하나 이상 걸려야 한다.
+        if name.startswith("human") and not result["passed"]:
+            bad.append(f"{name}: 사람 투 글 오탐 {[v['name'] for v in result['violations']]}")
+        if name.startswith("default") and result["passed"]:
+            bad.append(f"{name}: 기본 AI 말투를 놓침")
         got &= set(PAPER_ITEMS)
         if name.startswith("ok") and got:
             bad.append(f"{name}: 오탐 {sorted(got)}")
