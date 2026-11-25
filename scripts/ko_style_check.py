@@ -771,6 +771,22 @@ def prose_paragraphs(body: str):
     return tuple(paras)
 
 
+# 산문 문단에서 명령·권유형(~하세요, ~하십시오)이 세 문장 잇달아 나오는 곳. 번호 목록은 세지 않는다.
+# 상한은 둘이고 셋째 문장부터 센다. 위키 0%, 소설 대사 존대문 1.1%, 정리본 116편과 사람 글 표본 0건.
+CMD_END = re.compile(r"(?:세요|십시오)[.!]?[\"'”’)]*$")
+
+
+def command_runs(body: str):
+    out = []
+    for para in prose_paragraphs(body):
+        run = 0
+        for s in re.split(r"(?<=[.!?])\s+", para):
+            run = run + 1 if CMD_END.search(s.strip()) else 0
+            if run == 3:
+                out.append(s.strip()[:20])
+    return out
+
+
 def strip_noncounting(text: str) -> str:
     out = text
     for pat in MASKS:
@@ -934,6 +950,7 @@ def check(text: str) -> dict:
     recommend = RECOMMEND.findall(body)
     rec_tail = REC_TAIL.findall(body)
     mixed_list = mixed_lists(body)
+    cmd_runs = command_runs(body)
     inanimate_pl = INANIMATE_PLURAL.findall(body)
     succ = SUCCESSFULLY.findall(body)
     more_many = MORE_MANY.findall(body)
@@ -1035,6 +1052,7 @@ def check(text: str) -> dict:
     add("권고 꼬리 (~하는 것이 좋습니다)", recommend, 1, " / ".join(recommend[:3]))
     add("판에 박힌 권고 꼬리 (~하시길 권합니다)", [m for m in REC_TAIL.finditer(body)], 0,
         " / ".join(body[max(0, m.start() - 10):m.end()] for m in REC_TAIL.finditer(body)))
+    add("명령형 연속 (~하세요. ~보세요. ~마세요.)", cmd_runs, 0, " / ".join(cmd_runs[:2]))
     add("어림 표지 겹침 (대략 ~ 정도)", approx, 1, " / ".join(approx[:2]))
     add("~하는 데 도움이 됩니다 되풀이", helps, 1)
     add("공감·안심 상투 (자연스러운 일입니다)", empathy, 0,
@@ -1104,6 +1122,7 @@ def check(text: str) -> dict:
             "recommend_tail": len(recommend),
             "rec_tail_stamped": len(rec_tail),
             "mixed_list_endings": len(mixed_list),
+            "command_run": len(cmd_runs),
             "inanimate_plural": len(inanimate_pl),
             "closing_sentiment": len(sentiment),
             "approx_stack": len(approx),
