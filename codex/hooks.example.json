@@ -22,7 +22,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"/절대/경로/korean-style-guard/scripts/stop_hook.py\"",
+            "command": "bash \"/절대/경로/korean-style-guard/hooks/check-output.sh\"",
+            "timeoutSec": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/절대/경로/korean-style-guard/hooks/check-written-file.sh\"",
             "timeoutSec": 15
           }
         ]
