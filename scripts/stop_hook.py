@@ -25,6 +25,22 @@ from ko_lang_check import judge, prompt_from_payload  # noqa: E402
 
 HANGUL = re.compile(r"[가-힣]")
 
+# 사용자가 공지, 메일, 메시지를 대신 써 달라고 했으면 답변 끝의 `편하게 말씀해 주세요`는 에이전트의
+# 후속 제안이 아니라 받는 사람에게 하는 말이다. 이때는 후속 제안 항목을 세지 않는다.
+# 동아리 공지를 써 달라는 첫 답변 시험에서 이 항목이 멀쩡한 공지 문장을 잡았다.
+WRITING_REQUEST = re.compile(
+    r"(?:공지문?|안내문|이메일|메일|메시지|문자|편지|카톡|초대장|축사|인사말|답장|사과문|부탁\s?글|감사\s?인사)"
+    r"[^.?!\n]{0,12}?(?:써|작성|만들어)")
+WRITING_EXEMPT = ("묻지 않은 후속 제안",)
+
+
+def drop_writing_exempt(result: dict, prompt: str) -> dict:
+    """대신 써 달라는 요청이면 받는 사람에게 하는 말을 잡는 항목을 뺀다."""
+    if not prompt or not WRITING_REQUEST.search(prompt):
+        return result
+    kept = [v for v in result["violations"] if not v["name"].startswith(WRITING_EXEMPT)]
+    return dict(result, violations=kept, passed=not kept)
+
 INSTRUCTION = (
     "해당 부분을 고쳐서 답변을 다시 내주세요. 내용은 그대로 두고 서식만 바꿉니다.\n"
     "고친 답변만 내고 전체를 다시 설명하지 마세요.\n"
@@ -83,6 +99,8 @@ def run(payload: dict) -> int:
 
     from ko_style_check import check
     result = check(message)
+    if not result["passed"]:
+        result = drop_writing_exempt(result, prompt_from_payload(payload))
     if result["passed"]:
         return 0
 

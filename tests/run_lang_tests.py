@@ -20,6 +20,8 @@ KO_Q = "이 함수가 왜 None을 돌려주는지 알려줘."
 EN_A = ("The function returns None because the early return on line 12 runs before "
         "the value is assigned. Move the assignment above the guard and it will work.")
 KO_A = "12번째 줄의 이른 반환이 값을 넣기 전에 실행되어 None이 나옵니다. 대입을 위로 옮기면 됩니다."
+NOTICE_A = ("다음 독서 모임 장소가 2층 세미나실로 바뀌었습니다. 날짜와 시간은 그대로입니다. "
+            "장소를 찾기 어려우시면 저에게 개인 톡으로 편하게 말씀해 주세요.")
 
 # (이름, 질문, 답변, 잡아야 하는가)
 CASES = [
@@ -131,6 +133,7 @@ def run_hook():
     """stop_hook.py 를 실제 훅처럼 불러 종료 코드와 출력 계약을 본다."""
     hook = os.path.join(SCRIPTS, "stop_hook.py")
     tr = os.path.join(HERE, "lang", "transcript.jsonl")
+    tr_notice = os.path.join(HERE, "lang", "transcript_notice.jsonl")
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     env.pop("KO_STYLE_SKIP_LANG", None)
     cases = [
@@ -140,6 +143,9 @@ def run_hook():
                                   "stop_hook_active": True}, 0),
         ("hook_codex_json", {"transcript_path": tr, "last_assistant_message": EN_A,
                              "turn_id": "x"}, 0),
+        # 공지를 대신 써 달라고 했으면 공지 끝의 문의 안내는 후속 제안으로 세지 않는다.
+        ("hook_notice_followup_ok", {"transcript_path": tr_notice, "last_assistant_message": NOTICE_A}, 0),
+        ("hook_answer_followup_blocks", {"transcript_path": tr, "last_assistant_message": NOTICE_A}, 2),
     ]
     failed = 0
     for name, payload, code in cases:
