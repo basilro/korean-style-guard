@@ -691,15 +691,28 @@ def spaced_hyphen_dashes(body):
 
 
 ATTRIBUTION_TAIL = re.compile(r"(?:입니다|이에요|예요|이다)?[.)\]]*\s*$")
-POLITE_END = re.compile(r"(?:니다|요|죠)[.!?]?[\"'”’)]*$")
+# 존댓말 종결은 받침 ㅂ 뒤의 니다(`합니다`, `입니다`, `됩니다`)와 요, 죠다. 받침 없는 음절 뒤의
+# 니다로 끝나는 한다체 `아니다`는 존댓말이 아니라 세지 않는다.
+_JONG_B = "".join(chr(0xAC00 + i) for i in range(11172) if i % 28 == 17)
+POLITE_END = re.compile(r"(?:[" + _JONG_B + r"]니다|요|죠)[.!?]?[\"'”’)]*$")
+# 출처 이름이 아니라 문장을 잇는 것으로 보는 오른쪽: 받침 있는 음절 뒤의 종결 다(`빨라졌다`,
+# `있다`), 받침 ㅂ 뒤의 니다(`합니다`), 종결 요·죠(`오세요`)다. 받침 없는 다로 끝나는
+# 고유명사(`캐나다`, `플로리다`)는 뺀다.
+_JONG_ANY = "".join(chr(0xAC00 + i) for i in range(11172) if i % 28 != 0)
+ATTR_PREDICATE = re.compile(
+    r"(?:[" + _JONG_ANY + r"]다|[" + _JONG_B + r"]니다|요|죠)[.!?]?[\"'”’)]*$")
 
 
 def is_attribution(left: str, right: str) -> bool:
-    """`제목 - 출처`처럼 하이픈 뒤가 짧은 이름이면 참이다."""
+    """`제목 - 출처`처럼 하이픈 뒤가 짧은 이름이면 참이다.
+
+    출처는 네 어절 이하의 이름이고, 왼쪽이 존댓말로 끝나지 않으며 오른쪽이 문장으로 끝나지
+    않을 때다.
+    """
     core = ATTRIBUTION_TAIL.sub("", right.strip()).strip()
-    if not core or len(core) > 24 or len(core.split()) > 3:
+    if not core or len(core) > 24 or len(core.split()) > 4:
         return False
-    if PREDICATE_IN.search(core) or POLITE_END.search(left):
+    if ATTR_PREDICATE.search(core) or POLITE_END.search(left):
         return False
     return True
 
