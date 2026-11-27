@@ -20,7 +20,8 @@ KO_Q = "이 함수가 왜 None을 돌려주는지 알려줘."
 EN_A = ("The function returns None because the early return on line 12 runs before "
         "the value is assigned. Move the assignment above the guard and it will work.")
 KO_A = "12번째 줄의 이른 반환이 값을 넣기 전에 실행되어 None이 나옵니다. 대입을 위로 옮기면 됩니다."
-TILDE_A = "점검은 보통 10 ~ 20분 걸립니다. 그동안 접속이 잠깐 끊길 수 있습니다."
+NOTICE_OPEN_A = "모임 장소가 바뀌어 며칠 전에 메시지로 알려 드리겠습니다. 날짜와 시간은 그대로입니다."
+TILDE_A ="점검은 보통 10 ~ 20분 걸립니다. 그동안 접속이 잠깐 끊길 수 있습니다."
 NOTICE_A = ("다음 독서 모임 장소가 2층 세미나실로 바뀌었습니다. 날짜와 시간은 그대로입니다. "
             "장소를 찾기 어려우시면 저에게 개인 톡으로 편하게 말씀해 주세요.")
 
@@ -147,6 +148,9 @@ def run_hook():
         # 공지를 대신 써 달라고 했으면 공지 끝의 문의 안내는 후속 제안으로 세지 않는다.
         ("hook_notice_followup_ok", {"transcript_path": tr_notice, "last_assistant_message": NOTICE_A}, 0),
         ("hook_answer_followup_blocks", {"transcript_path": tr, "last_assistant_message": NOTICE_A}, 2),
+        # 공지 첫머리의 `알려 드리겠습니다` 는 공지 내용이라 예고로 세지 않는다.
+        ("hook_notice_opener_ok", {"transcript_path": tr_notice, "last_assistant_message": NOTICE_OPEN_A}, 0),
+        ("hook_answer_opener_blocks", {"transcript_path": tr, "last_assistant_message": NOTICE_OPEN_A}, 2),
         # 물결표 앞뒤 띄움은 대화 답변에서는 세지 않는다(파일 검사에서는 센다).
         ("hook_tilde_not_blocked", {"transcript_path": tr, "last_assistant_message": TILDE_A}, 0),
     ]

@@ -885,7 +885,10 @@ def strip_noncounting(text: str) -> str:
         out = re.sub(pat, " ", out, flags=re.S)
     # 부호를 '쓴' 것이 아니라 '논의 대상으로 언급한' 자리는 세지 않는다.
     # 예: 엠대시(—), 엔대시(–). 규칙 자신이 자기 규칙에 걸리는 것을 막는다.
-    return re.sub(r"\((\s*[—–]\s*)\)", " ", out)
+    out = re.sub(r"\((\s*[—–]\s*)\)", " ", out)
+    # 낫표와 겹낫표로 묶은 글과 책의 제목은 인용이다. 원제에 든 대시나 부호를 세지 않는다
+    # (참고 문헌의 「…번역투 고찰 —아이퍽10의 번역투를 중심으로—」).
+    return re.sub(r"「[^」\n]*」|『[^』\n]*』", " ", out)
 
 
 def unfinished_sentences(body: str):
