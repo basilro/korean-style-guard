@@ -84,7 +84,7 @@ def inject_rules(messages, inject: str = "rules"):
     return [{"role": "system", "content": rules}] + list(messages)
 
 
-def evaluate(prompt: str, answer: str, skip_lang: bool = False):
+def evaluate(prompt: str, answer: str, skip_lang: bool = False, lite: bool = None):
     """답을 검사해 다시 쓰게 할 지시를 돌려준다. 통과하면 None.
 
     stop_hook.run 과 같은 순서다. 한국어 질문에 영어로 답했는지 먼저 보고, 다음으로 보칙을 센다.
@@ -96,7 +96,7 @@ def evaluate(prompt: str, answer: str, skip_lang: bool = False):
         return LANG_REASON
     if not HANGUL.search(answer):
         return None
-    result = check(answer)
+    result = check(answer, lite=lite)
     if not result["passed"]:
         result = drop_answer_exempt(drop_writing_exempt(result, prompt))
     if result["passed"]:
@@ -105,12 +105,13 @@ def evaluate(prompt: str, answer: str, skip_lang: bool = False):
 
 
 def guard(messages, complete, *, max_rounds: int = 2, inject: str = "rules",
-          skip_lang: bool = False):
+          skip_lang: bool = False, lite: bool = None):
     """보칙을 걸어 답을 받는다.
 
     messages: OpenAI 형식의 메시지 목록.
     complete: messages 를 받아 답변 문자열을 돌려주는 함수.
     max_rounds: 다시 쓰기 최대 횟수. 그 안에 못 고치면 마지막 답을 그대로 돌려준다.
+    lite: 참이면 교정·교열을 빼고 보칙만 건다. 다시 쓰기가 줄어 토큰을 아낀다.
     반환: (답변 문자열, 쓴 다시 쓰기 횟수).
     """
     prompt = last_user_text(messages)
@@ -118,7 +119,7 @@ def guard(messages, complete, *, max_rounds: int = 2, inject: str = "rules",
     answer = complete(convo)
     rounds = 0
     while rounds < max_rounds:
-        reason = evaluate(prompt, answer, skip_lang)
+        reason = evaluate(prompt, answer, skip_lang, lite)
         if reason is None:
             break
         convo = convo + [

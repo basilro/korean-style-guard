@@ -40,6 +40,7 @@ PORT = int(os.environ.get("GUARD_PORT", "8089"))
 MAX_ROUNDS = int(os.environ.get("GUARD_MAX_ROUNDS", "2"))
 INJECT = os.environ.get("GUARD_INJECT", "rules")
 SKIP_LANG = os.environ.get("GUARD_SKIP_LANG") == "1"
+LITE = True if os.environ.get("GUARD_LITE") == "1" else None
 
 
 def _upstream(path: str, payload=None, method="POST"):
@@ -134,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             text, rounds = kg.guard(messages, _make_complete(body),
-                                    max_rounds=MAX_ROUNDS, inject=INJECT, skip_lang=SKIP_LANG)
+                                    max_rounds=MAX_ROUNDS, inject=INJECT, skip_lang=SKIP_LANG, lite=LITE)
         except urllib.error.URLError as e:
             self._send_json({"error": "upstream: " + str(e)}, 502)
             return
@@ -148,6 +149,7 @@ def main():
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"한국어 보칙 프록시: http://{HOST}:{PORT}/v1  ->  {UPSTREAM}")
     print(f"  다시 쓰기 최대 {MAX_ROUNDS}회, 보칙 주입 {INJECT}"
+          + (", 교정 끔(보칙만)" if LITE else "")
           + (", 언어 판정 끔" if SKIP_LANG else ""))
     try:
         srv.serve_forever()

@@ -66,6 +66,19 @@ def run_cases():
     msgs = kg.inject_rules([{"role": "user", "content": "안녕"}], "none")
     cases.append(("inject_none_passthrough", len(msgs) == 1 and msgs[0]["role"] == "user"))
 
+    # 7. lite 는 교정 항목을 빼고 보칙만 센다.
+    jeong = "홈 디렉토리에서 설정 파일을 엽니다."          # 교정: 디렉토리→디렉터리
+    bochik = "설정을 조정합니다 — 응답이 빨라집니다."       # 보칙: 엠대시
+    cases.append(("correction_on_full", not kg.check(jeong)["passed"]))
+    cases.append(("correction_off_lite", kg.check(jeong, lite=True)["passed"]))
+    cases.append(("bochik_hits_both",
+                  not kg.check(bochik)["passed"] and not kg.check(bochik, lite=True)["passed"]))
+    # lite 가드는 교정만 걸린 답을 다시 쓰게 하지 않는다.
+    c, box = scripted([jeong])
+    text, rounds = kg.guard([{"role": "user", "content": "설정 파일 어디 있어?"}], c,
+                            max_rounds=2, lite=True)
+    cases.append(("guard_lite_no_rewrite", rounds == 0 and text == jeong))
+
     failed = 0
     for name, ok in cases:
         if not ok:

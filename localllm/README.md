@@ -46,6 +46,7 @@ curl http://localhost:8089/v1/chat/completions -H "Content-Type: application/jso
 | `GUARD_MAX_ROUNDS` | 다시 쓰기 최대 횟수 | `2` |
 | `GUARD_INJECT` | `rules`, `rules+examples`, `none` | `rules` |
 | `GUARD_SKIP_LANG` | `1`이면 영어 답변 되돌리기를 끔 | 꺼짐 |
+| `GUARD_LITE` | `1`이면 교정·교열을 빼고 보칙만 검사 | 꺼짐 |
 
 ## 코드에서 쓰기
 
@@ -76,6 +77,7 @@ print(answer, f"(다시 쓰기 {rounds}회)")
 
 - 작은 모델은 Claude만큼 38항목을 다 지키지 못해 첫 답이 더 자주 걸립니다. 그만큼 다시 쓰기가 자주 돕니다. `GUARD_MAX_ROUNDS`로 횟수를 막아 시간과 품질을 지킵니다.
 - 보칙 본문은 약 1만 자입니다. 문맥이 좁은 모델에는 부담이라, 기본값은 예문을 뺀 본문만 넣습니다(`GUARD_INJECT=rules`). 더 잘 지키게 하려면 `rules+examples`로 예문까지 넣되 문맥을 더 씁니다.
+- 교정 항목(외래어 오표기, 사이시옷, 띄어쓰기, 문장 부호)은 한국어가 약한 모델에서 자주 걸려 다시 쓰기를 늘립니다. 가볍게 쓰고 싶으면 `GUARD_LITE=1`로 보칙(문체)만 거세요. 맞춤법 교정 대신 AI 티만 지웁니다.
 
 ## 다른 틀의 훅에 꽂기
 

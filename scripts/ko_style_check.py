@@ -13,6 +13,7 @@
 사람에게 보이는 한국어는 값 쪽에만 둔다.
 """
 import json
+import os
 import re
 import sys
 from functools import lru_cache
@@ -1124,7 +1125,14 @@ def correction_findings(body: str):
     return out
 
 
-def check(text: str) -> dict:
+def check(text: str, lite: bool = None) -> dict:
+    """보칙 위반을 센다. lite 가 참이면 교정·교열 항목을 빼고 보칙(문체)만 센다.
+
+    lite 를 주지 않으면 환경 변수 KO_STYLE_LITE 를 본다. 교정 항목은 로컬 모델에서 자주 걸려
+    다시 쓰기가 늘므로, 토큰을 아끼려면 lite 로 보칙만 거는 길을 둔다.
+    """
+    if lite is None:
+        lite = os.environ.get("KO_STYLE_LITE") == "1"
     body = strip_noncounting(text)
     lines = body.split("\n")
 
@@ -1365,8 +1373,10 @@ def check(text: str) -> dict:
     add("더 많은 X 되풀이", more_many, 1)
     add("띄어쓰기 (할수있다, 하고있다)", spacing, 0, " / ".join(s.strip() for s in spacing[:4]))
     corrections = correction_findings(body)
-    for _key, _name, _n, _limit, _detail in corrections:
-        add(_name, [None] * _n, _limit, _detail)
+    # lite 는 교정·교열을 위반으로 세지 않는다. counts 에는 그대로 남겨 진단에 쓴다.
+    if not lite:
+        for _key, _name, _n, _limit, _detail in corrections:
+            add(_name, [None] * _n, _limit, _detail)
 
     return {
         "violations": violations,
@@ -1458,8 +1468,9 @@ def format_report(result: dict) -> str:
 
 
 def main() -> int:
-    args = [a for a in sys.argv[1:] if a != "--json"]
     as_json = "--json" in sys.argv
+    lite = "--lite" in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--json", "--lite")]
 
     if args:
         with open(args[0], encoding="utf-8") as fh:
@@ -1467,7 +1478,7 @@ def main() -> int:
     else:
         text = sys.stdin.read()
 
-    result = check(text)
+    result = check(text, lite=lite or None)
 
     if as_json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
