@@ -673,15 +673,35 @@ def spaced_hyphen_dashes(body):
     "하나입니다 - 권한입니다"처럼 한쪽에 서술어가 있으면 대시다. "사이트 설정 - 개인 정보 보호 -
     콘텐츠 허용"이나 "스캔 - 폴더" 같은 메뉴 경로는 양쪽이 명사구라 뺀다. 사람이 쓴 사용 설명서
     37조각 가운데 7조각이 메뉴 경로 하나로 걸렸다.
+
+    `물가 다시 오른다 - 연합뉴스`, `[기사 제목](링크) - 한겨레입니다`처럼 제목 뒤에 출처나 지은이를
+    붙인 꼴도 뺀다. 오른쪽이 세 어절 이하의 이름(끝의 `입니다`, `예요`는 떼고 본다)이고 왼쪽이
+    `~니다`, `~요` 같은 존댓말 서술어로 끝나지 않을 때다. 신문 제목은 `~다`로 끝나도 제목이다.
     """
     out = []
     for line in body.split("\n"):
         for m in SPACED_HYPHEN.finditer(line):
             left = line[:m.start()].rstrip()
             right = SPACED_HYPHEN.split(line[m.end():], maxsplit=1)[0]
+            if is_attribution(left, right):
+                continue
             if PREDICATE_END.search(left) or PREDICATE_IN.search(right):
                 out.append(m.group())
     return out
+
+
+ATTRIBUTION_TAIL = re.compile(r"(?:입니다|이에요|예요|이다)?[.)\]]*\s*$")
+POLITE_END = re.compile(r"(?:니다|요|죠)[.!?]?[\"'”’)]*$")
+
+
+def is_attribution(left: str, right: str) -> bool:
+    """`제목 - 출처`처럼 하이픈 뒤가 짧은 이름이면 참이다."""
+    core = ATTRIBUTION_TAIL.sub("", right.strip()).strip()
+    if not core or len(core) > 24 or len(core.split()) > 3:
+        return False
+    if PREDICATE_IN.search(core) or POLITE_END.search(left):
+        return False
+    return True
 
 
 TOPIC = re.compile(r"([가-힣]{2,})(?:은|는)\s")
