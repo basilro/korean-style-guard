@@ -869,8 +869,90 @@ FRAME_CASES = [
 ]
 
 
+# 교정과 교열 항목. (키, 걸려야 하는 글, 통과해야 하는 글). 허용 1인 항목은 걸리는 글에 두 번 넣는다.
+CORRECTION_CASES = [
+    ("loanword", "업로드한 컨텐츠는 검토 뒤에 공개됩니다. 오류 메세지를 그대로 붙여 주세요.",
+     "업로드한 콘텐츠는 검토 뒤에 공개됩니다. 설정 파일은 홈 디렉터리에 있습니다."),
+    ("loanword_shell", "팀의 리더쉽이 흔들렸습니다. 쉘 스크립트로 백업을 돌립니다.",
+     "팀의 리더십이 흔들렸습니다. 셸 스크립트로 백업을 돌립니다."),
+    ("saisiot_tech", "배열의 최대값을 구합니다. 초기값은 0으로 둡니다.",
+     "배열의 최댓값을 구합니다. 기본값과 설정값은 따로 저장합니다."),
+    ("saisiot_word", "파일 갯수를 먼저 셉니다.", "파일 개수를 먼저 셉니다. 회의 인사말은 짧게 씁니다."),
+    ("wrong_word", "답장이 금새 왔습니다. 배포는 몇일 걸립니다.",
+     "답장이 금세 왔습니다. 배포는 며칠 걸립니다. 그 설정은 웬만하면 건드리지 않습니다."),
+    ("dwi_dwae", "설치가 안 되서 다시 받았습니다. 그렇게 하면 되요.",
+     "설치가 안 돼서 다시 받았습니다. 그렇게 하면 돼요. 이 방법도 됩니다."),
+    ("sipsio", "요청서를 내 주십시요. 이 문장은 맞지 않아요, 아니예요.",
+     "요청서를 내 주십시오. 이 문장은 맞지 않아요, 아니에요."),
+    ("eurose", "캐시를 비움으로서 속도가 회복됐습니다.",
+     "캐시를 비움으로써 속도가 회복됐습니다. 사용자로서 한 가지 묻겠습니다."),
+    ("ryul", "이번 학기 합격율이 올랐습니다. 점유률은 10%입니다.",
+     "이번 학기 합격률이 올랐습니다. 점유율은 10%입니다. 비율이 같습니다."),
+    ("ryang", "데이터량이 늘었습니다.", "데이터양이 늘었습니다. 사용량과 처리량을 봅니다."),
+    ("ji_drop", "이 설정은 아직 익숙치 않습니다.", "이 설정은 아직 익숙지 않습니다. 점수를 두고 거래하지 않습니다."),
+    ("copula_space", "필요한 것은 배포 입니다. 남은 일은 검토 입니다.", "필요한 것은 배포입니다. 남은 일은 검토입니다."),
+    ("bound_noun", "결과가 나오는대로 알립니다. 내가 본것은 오류입니다.",
+     "결과가 나오는 대로 알립니다. 내가 본 것은 오류입니다."),
+    ("adv_word", "또다른 문제가 있습니다.", "또 다른 문제가 있습니다. 한 번 더 확인합니다."),
+    ("date_dot", "행사는 2024.3.15에 열립니다. 마감은 2025. 1. 2 입니다.",
+     "행사는 2024. 3. 15.에 열립니다. 일기는 1913. 7. 16~1914. 1.에 걸쳐 씁니다."),
+    ("colon_space", "일시 : 12월 3일", "일시: 12월 3일. 시각은 09:50입니다."),
+    ("gge", "제가 다시 확인할께요.", "제가 다시 확인할게요. 이것은 모를 일입니다."),
+    ("confusable", "정답을 맞췄습니다.", "정답을 맞혔습니다. 제목을 맞춥니다."),
+    ("particle_space", "그 날 부터 시작합니다. 어제 까지 끝냅니다.", "그날부터 시작합니다. 어제까지 끝냅니다."),
+    ("numeral_space", "문제가 두가지 있습니다. 몇개를 고릅니다.", "문제가 두 가지 있습니다. 몇 개를 고릅니다."),
+    ("tilde_space", "시간은 10 ~ 20ms입니다.", "시간은 10~20ms입니다."),
+    ("official_style", "금번 개편을 알립니다.", "이번 개편을 알립니다."),
+    ("inanimate_provide", "이 도구는 새로운 경험을 제공합니다.", "이 도구로 새로운 경험을 얻습니다. 공고는 참여 기회를 제공합니다."),
+    ("light_verb", "배포를 진행했습니다.", "배포했습니다. 연구를 진행했습니다. 회의를 진행합니다."),
+    ("noun_possible", "환불 신청이 가능합니다. 설치가 가능합니다.", "환불을 신청하실 수 있어요. 설치할 수 있습니다."),
+    ("passive_view", "더 낫다고 보는 쪽이 많은 것으로 생각됩니다. 이 방식이 안전한 것으로 판단됩니다.",
+     "저는 더 낫다고 봅니다. 저는 이 방식이 안전한 것으로 판단됩니다."),
+]
+
+
+def _correction_name(key):
+    import ko_style_check as m
+    for k, name, *_ in m._CORRECTIONS + m._EDIT:
+        if k == key:
+            return name
+    return "판단 피동 (~로 판단됩니다)"
+
+
 def main():
     failed = 0
+    for key, bad, good in CORRECTION_CASES:
+        name = _correction_name(key)
+        if name not in {v["name"] for v in check(bad)["violations"]}:
+            failed += 1
+            print(f"실패 correction_{key}_hit: 걸려야 하는 글이 안 걸림")
+        if name in {v["name"] for v in check(good)["violations"]}:
+            failed += 1
+            print(f"실패 correction_{key}_ok: 바른 글이 걸림")
+    total_corr = len(CORRECTION_CASES) * 2
+    # 허용 1인 항목은 한 번만 나오면 통과한다.
+    for key, once in [("copula_space", "필요한 것은 배포 입니다."), ("date_dot", "행사는 2024.3.15에 열립니다."),
+                      ("noun_possible", "환불 신청이 가능합니다."), ("passive_view", "이 방식이 안전한 것으로 판단됩니다.")]:
+        total_corr += 1
+        if _correction_name(key) in {v["name"] for v in check(once)["violations"]}:
+            failed += 1
+            print(f"실패 correction_{key}_once: 한 번에 걸림")
+    # 정상 용법: 기간 날짜, 버전 번호, 옛 글이 아닌 일반 문장, 코드와 인용 안의 오표기는 어떤 교정 항목에도 걸리지 않는다.
+    normal = [
+        "기간은 1913. 7. 16~1914. 1.입니다. 버전 1.12.1과 2.0.3을 씁니다. 날짜는 2024. 3. 15.로 적습니다.",
+        "합격률과 점유율을 비교합니다. 최댓값과 기댓값은 같고 결괏값은 10입니다. 데이터양이 두 배가 됐습니다.",
+        "서버를 켜 둘 수 있습니다. 한 번 더 확인하고 나오는 대로 보냅니다. 회의를 진행합니다.",
+        "예전 표기는 `디렉토리`와 `메세지`, `금새`입니다. 코드는 ```\nmax값 = 컨텐츠\n```로 둡니다.",
+        "> 금번 개편은 몇일 걸립니다.\n\n본문은 인용을 따릅니다. 위 인용은 옛 공문입니다.",
+    ]
+    names = {n for _k, n, *_ in __import__("ko_style_check")._CORRECTIONS + __import__("ko_style_check")._EDIT}
+    names.add("판단 피동 (~로 판단됩니다)")
+    for i, text in enumerate(normal):
+        total_corr += 1
+        got = names & {v["name"] for v in check(text)["violations"]}
+        if got:
+            failed += 1
+            print(f"실패 correction_normal_{i}: 정상 문장이 걸림 {sorted(got)}")
     for name, text, must, must_not in CASES:
         got = {v["name"] for v in check(text)["violations"]}
         missing = [m for m in must if m not in got]
@@ -889,7 +971,7 @@ def main():
         if got != want:
             failed += 1
             print(f"실패 {name}: report_frame {got} (기대 {want})")
-    total = len(CASES) + len(COUNT_CASES) + len(FRAME_CASES)
+    total = len(CASES) + len(COUNT_CASES) + len(FRAME_CASES) + total_corr
     print(f"{total - failed}/{total} 통과")
     return 1 if failed else 0
 

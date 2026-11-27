@@ -33,6 +33,16 @@ WRITING_REQUEST = re.compile(
     r"[^.?!\n]{0,12}?(?:써|작성|만들어)")
 WRITING_EXEMPT = ("묻지 않은 후속 제안",)
 
+# 대화 답변에서는 세지 않는 교정 항목. 물결표 앞뒤 띄움(`10 ~ 20`)은 AI 기본 답변 40편 중 5편에
+# 나왔는데, 규정이 띄어쓰기를 따로 적지 않은 표기 통일 문제라 답변 전체를 다시 쓰게 할 만큼은
+# 아니다. 파일 검사와 `/ko-check` 교정에서는 그대로 센다.
+ANSWER_EXEMPT = ("물결표 띄움",)
+
+
+def drop_answer_exempt(result: dict) -> dict:
+    kept = [v for v in result["violations"] if not v["name"].startswith(ANSWER_EXEMPT)]
+    return dict(result, violations=kept, passed=not kept)
+
 
 def drop_writing_exempt(result: dict, prompt: str) -> dict:
     """대신 써 달라는 요청이면 받는 사람에게 하는 말을 잡는 항목을 뺀다."""
@@ -100,7 +110,7 @@ def run(payload: dict) -> int:
     from ko_style_check import check
     result = check(message)
     if not result["passed"]:
-        result = drop_writing_exempt(result, prompt_from_payload(payload))
+        result = drop_answer_exempt(drop_writing_exempt(result, prompt_from_payload(payload)))
     if result["passed"]:
         return 0
 
