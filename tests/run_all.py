@@ -15,9 +15,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SUITES = ["run_prose_tests.py", "run_lang_tests.py", "run_lang_adversarial.py", "run_prose_adversarial.py", "run_identifier_tests.py"]
+SUITES = ["run_prose_tests.py", "run_lang_tests.py", "run_lang_adversarial.py", "run_prose_adversarial.py", "run_identifier_tests.py", "run_localllm_tests.py"]
 DOCS = ["README.md", "rules/ko-style-rules.md", "rules/ko-style-examples.md", "skills/ko-style/SKILL.md",
-        "output-styles/korean-style.md", "commands/ko-check.md", "docs/guide.md"]
+        "output-styles/korean-style.md", "commands/ko-check.md", "docs/guide.md", "localllm/README.md"]
 
 
 def check_sync():

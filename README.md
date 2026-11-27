@@ -77,6 +77,7 @@ codex/install.sh
 ## 더 알아보기
 
 - [`docs/guide.md`](docs/guide.md): 동작 방식, 검사 항목과 허용 개수, 검사 끄기, 검사기 단독 실행, 시험
+- [`localllm/README.md`](localllm/README.md): Qwen 같은 로컬 모델(Ollama·MLX·LM Studio)에 보칙을 거는 프록시와 라이브러리
 - [`rules/ko-style-rules.md`](rules/ko-style-rules.md): 보칙 전문
 
 ## 라이선스
